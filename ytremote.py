@@ -36,7 +36,7 @@ with open(os.path.join(SCRIPT_DIR, "icon.svg"), "r", encoding="utf-8") as f:
 with open(os.path.join(SCRIPT_DIR, "js", "sw.js"), "r", encoding="utf-8") as f:
     SW_JS = f.read()
 
-with open(os.path.join(SCRIPT_DIR, "index.html"), "r", encoding="utf-8") as f:
+with open(os.path.join(SCRIPT_DIR, "ytremote.html"), "r", encoding="utf-8") as f:
     HTML = f.read()
 
 
