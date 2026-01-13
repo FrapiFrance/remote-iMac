@@ -5,6 +5,8 @@ import subprocess
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 from urllib.parse import urlparse
+import re
+import os
 
 HOST = "0.0.0.0"
 PORT = 8000
@@ -25,13 +27,16 @@ MANIFEST: dict[str, str | list[dict[str, str]]] = {
     "icons": [{"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml"}],
 }
 
-with open("icon.svg", "r", encoding="utf-8") as f:
+# Get the directory where this script is located
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+with open(os.path.join(SCRIPT_DIR, "icon.svg"), "r", encoding="utf-8") as f:
     ICON_SVG = f.read()
 
-with open("sw.js", "r", encoding="utf-8") as f:
+with open(os.path.join(SCRIPT_DIR, "sw.js"), "r", encoding="utf-8") as f:
     SW_JS = f.read()
 
-with open("index.html", "r", encoding="utf-8") as f:
+with open(os.path.join(SCRIPT_DIR, "index.html"), "r", encoding="utf-8") as f:
     HTML = f.read()
 
 
@@ -81,7 +86,6 @@ def get_system_volume():
     vol = None
     if rc == 0:
         # Example: "Volume: front-left: 65536 / 100% / 0.00 dB, ..."
-        import re
 
         m = re.search(r"(\d+)%", out)
         if m:
