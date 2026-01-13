@@ -6,6 +6,9 @@ Il faut avoir MagicMirror avec [MMM-BackgroundSlideshow](https://github.com/dari
 
 Et bien sûr YTMDesktop
 
-et un certain nombre de packages nécessaires (xdotool, playctl...)
+et un certain nombre de packages nécessaires (xdotool, playerctl, pactl ...)
 
 L'ordi concerné est sous kubuntu 24.04 (X11 nécessaire)
+
+![Screenshot](screenshot.jpg)
+
