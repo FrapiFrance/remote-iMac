@@ -39,6 +39,12 @@ with open(os.path.join(SCRIPT_DIR, "js", "sw.js"), "r", encoding="utf-8") as f:
 with open(os.path.join(SCRIPT_DIR, "ytremote.html"), "r", encoding="utf-8") as f:
     HTML = f.read()
 
+with open(os.path.join(SCRIPT_DIR, "css", "ytremote.css"), "r", encoding="utf-8") as f:
+    CSS = f.read()
+
+with open(os.path.join(SCRIPT_DIR, "js", "ytremote.js"), "r", encoding="utf-8") as f:
+    JS = f.read()
+
 
 def run_cmd(cmd: list[str]) -> tuple[int, str]:
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
@@ -193,6 +199,12 @@ class Handler(BaseHTTPRequestHandler):
                 json.dumps(get_status()).encode("utf-8"),
                 "application/json; charset=utf-8",
             )
+            return
+        if p == "/css/ytremote.css":
+            self._send(200, CSS.encode("utf-8"), "text/css; charset=utf-8")
+            return
+        if p == "/js/ytremote.js":
+            self._send(200, JS.encode("utf-8"), "application/javascript; charset=utf-8")
             return
         self._send(404, b"Not found\n")
 
