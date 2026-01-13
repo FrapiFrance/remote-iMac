@@ -3,6 +3,7 @@
 import json
 import subprocess
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from typing import Any
 from urllib.parse import urlparse
 
 HOST = "0.0.0.0"
@@ -13,348 +14,40 @@ PORT = 8000
 # BASE_CMD = ["playerctl", "-p", PLAYER]
 BASE_CMD = ["playerctl"]
 
-APP_TITLE = "remote iMac"
-THEME_COLOR = "#003366"
 
-HTML = f"""<!doctype html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="{THEME_COLOR}" />
-  <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="icon" href="/icon.svg" type="image/svg+xml">
-  <title>{APP_TITLE}</title>
-  <style>
-    html, body {{ height: 100%; margin: 0; }}
-    body{{
-      background:{THEME_COLOR}; color:#fff;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, sans-serif;
-      display:flex; align-items:center; justify-content:center;
-      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-    }}
-    .page{{
-      width:min(980px, 96vw);
-      display:flex; flex-direction:column; gap:18px;
-    }}
-    .now{{
-      background:#121212;
-      border: 2px solid rgba(255,255,255,.14);
-      border-radius:20px;
-      padding:16px 18px;
-      box-shadow: 0 12px 34px rgba(0,0,0,.45);
-      min-height:92px;
-      display:flex; flex-direction:column; justify-content:center;
-    }}
-    .title{{
-      font-size: clamp(18px, 3.5vw, 30px);
-      font-weight: 900;
-      line-height: 1.15;
-      word-break: break-word;
-    }}
-    .artist{{
-      margin-top:6px;
-      font-size: clamp(14px, 2.5vw, 18px);
-      opacity:.78;
-      word-break: break-word;
-    }}
-    .grid{{
-      width:min(980px, 96vw);
-      display:grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 14px;
-    }}
-    .grid2{{
-      width:min(980px, 96vw);
-      display:grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px;
-    }}
-    button{{
-      border: 2px solid rgba(255,255,255,.22);
-      border-radius: 18px;
-      background: #66A0D3;
-      color: #000;
-      font-size: clamp(16px, 3.2vw, 28px);
-      font-weight: 900;
-      letter-spacing: 0.5px;
-      box-shadow: 0 14px 34px rgba(0,0,0,.45);
-      touch-action: manipulation;
-      -webkit-tap-highlight-color: transparent;
-      user-select:none;
-      padding: 10px 10px;          /* moins haut */
-    }}
-    button:active {{ transform: scale(0.985); }}
-    .hint{{ text-align:center; opacity:.55; font-size:10px; margin-top:2px; }}
-    .pill{{
-      display:inline-block;
-      padding:2px 10px;
-      border-radius:999px;
-      background:#1f1f1f;
-      border: 1px solid rgba(255,255,255,.14);
-      font-weight:900;
-      margin-right:8px;
-    }}
-    .photos{{
-      background:#000;
-      border: 2px solid rgba(255,255,255,.14);
-      border-radius:20px;
-      padding:14px 16px;
-      box-shadow: 0 12px 34px rgba(0,0,0,.45);
-    }}
-    .photos-title{{
-      font-size: 18px;
-      font-weight: 900;
-      margin: 0 0 10px 0;
-    }}
-    .grid-photos{{
-      width:100%;
-      display:grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 12px;
-    }}
-
-    A:link    {{color:#aaaaaa;text-decoration: none;}}
-    A:visited {{color:#808080;text-decoration: none;}}
-    A:active  {{color:#ff0000;text-decoration: underline;}}
-    A:hover   {{              text-decoration: underline;}}
-  </style>
-</head>
-<body>
-  <div class="page">
-    <div class="now">
-      <div class="title"><span class="pill" id="state">…</span><span id="track">Aucune piste</span></div>
-      <div class="artist" id="artist">—</div>
-    </div>
-    <div class="now" style="min-height:auto">
-      <div class="title">
-        <span class="pill">⏱</span>
-        <span id="posLabel">—:— / —:—</span>
-      </div>
-      <input id="pos" type="range" min="0" max="100" value="0"
-            style="width:100%; margin-top:12px;"
-            oninput="queueSeek(this.value)">
-    </div>
-
-    <div class="grid">
-      <button onclick="send('/api/previous')">⏮</button>
-      <button onclick="send('/api/play-pause')">⏯</button>
-      <button onclick="send('/api/next')">⏭</button>
-    </div>
-
-    <div class="grid2">
-      <button onclick="send('/api/vol-down')">🔉 −</button>
-      <button onclick="send('/api/vol-up')">🔊 +</button>
-    </div>
-
-    <div class="now" style="min-height:auto">
-      <div class="title">
-        <span class="pill">🔊</span>
-        <span id="volLabel">—%</span>
-        <button style="margin-left:10px; padding:10px 14px; font-size:18px; border-radius:14px;"
-                onclick="send('/api/mute-toggle')">🔇 / 🔈</button>
-      </div>
-      <input id="vol" type="range" min="0" max="100" value="50"
-            style="width:100%; margin-top:12px;"
-            oninput="queueVolume(this.value)">
-    </div>
-
-    <div class="photos">
-      <div class="photos-title">Photos</div>
-      <div class="grid-photos">
-        <button onclick="send('/api/photos-prev')">⏮</button>
-        <button onclick="send('/api/photos-pause')">⏸</button>
-        <button onclick="send('/api/photos-next')">⏭</button>
-      </div>
-    </div>
-
-    <div class="hint"><a href=mailto:frapi@centrale-lyon.org>Frapi</a> {APP_TITLE}<br/>
-    installable<br/>
-    • iOS Safari : Partager → Sur l’écran d’accueil<br/>
-    • Android Chrome : Menu → Installer l’application
-    </div>
-  </div>
-
-<script>
-
-const APP_TITLE = "{APP_TITLE}";
-async function send(path) {{
-  try {{
-    const r = await fetch(path, {{method:'POST'}});
-    if(!r.ok) throw new Error(await r.text());
-    if (navigator.vibrate) navigator.vibrate(15);
-    await refresh();
-  }} catch(e) {{
-    alert("Erreur: " + e);
-  }}
-}}
-
-async function refresh(){{
-  try{{
-    const r = await fetch('/api/status', {{cache:'no-store'}});
-    if(!r.ok) throw new Error(await r.text());
-    const s = await r.json();
-    document.getElementById('track').textContent = s.title || "Aucune piste";
-    document.getElementById('artist').textContent = s.artist || "—";
-    const st = s.status || "Unknown";
-    document.getElementById('state').textContent = (st === "Playing") ? "▶︎" : (st === "Paused") ? "⏸" : "…";
-    if (typeof s.volume === "number") {{
-      document.getElementById('vol').value = s.volume;
-      document.getElementById('volLabel').textContent = `${{s.volume}}%${{s.muted ? " (muet)" : ""}}`;
-    }}
-    // position / durée
-    if (typeof s.length === "number" && s.length > 0) {{
-      const pos = (typeof s.pos === "number") ? s.pos : 0;
-      document.getElementById('pos').max = s.length;
-      document.getElementById('pos').value = Math.min(Math.max(0, pos), s.length);
-      document.getElementById('posLabel').textContent = `${{fmtTime(pos)}} / ${{fmtTime(s.length)}}`;
-
-      // mettre la progression dans le titre (onglet + PWA)
-      document.title = `${{APP_TITLE}} — ${{s.title}} — ${{fmtTime(pos)}}/${{fmtTime(s.length)}}`;
-    }} else {{
-      document.getElementById('posLabel').textContent = "—:— / —:—";
-      document.title = APP_TITLE;
-    }}
-
-  }} catch(e) {{}}
-}}
-
-if ('serviceWorker' in navigator) {{
-  navigator.serviceWorker.register('/sw.js').catch(()=>{{}});
-}}
-
-let volTimer = null;
-
-function queueVolume(v){{
-  document.getElementById('volLabel').textContent = `${{v}}%`;
-  if (volTimer) clearTimeout(volTimer);
-  volTimer = setTimeout(() => setVolume(v), 120);
-}}
-
-async function setVolume(v){{
-  try{{
-    const r = await fetch('/api/vol-set', {{
-      method:'POST',
-      headers: {{'Content-Type':'application/json'}},
-      body: JSON.stringify({{value: Number(v)}})
-    }});
-    if(!r.ok) throw new Error(await r.text());
-  }} catch(e){{
-    // optionnel: alert(e)
-  }}
-}}
-
-function fmtTime(sec){{
-  sec = Math.max(0, Math.floor(sec || 0));
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${{m}}:${{String(s).padStart(2,'0')}}`;
-}}
-
-let seekTimer = null;
-
-function queueSeek(v){{
-  // feedback immédiat
-  const cur = Number(v);
-  const max = Number(document.getElementById('pos').max || 0);
-  document.getElementById('posLabel').textContent =
-    `${{fmtTime(cur)}} / ${{fmtTime(max)}}`;
-
-  if (seekTimer) clearTimeout(seekTimer);
-  seekTimer = setTimeout(() => setSeek(cur), 120);
-}}
-
-async function setSeek(v){{
-  try{{
-    const r = await fetch('/api/seek-set', {{
-    method:'POST',
-      headers: {{"Content-Type":'application/json'}},
-      body: JSON.stringify({{value: Number(v)}})
-    }});
-    if(!r.ok) throw new Error(await r.text());
-  }} catch(e){{
-    // optionnel: alert(e)
-  }}
-}}
-
-refresh();
-setInterval(refresh, 1500);
-</script>
-</body>
-</html>
-"""
-
-MANIFEST = {
-    "name": APP_TITLE,
+MANIFEST: dict[str, str | list[dict[str, str]]] = {
+    "name": "remote iMac",
     "short_name": "remote iMac",
     "start_url": "/",
     "display": "standalone",
-    "background_color": THEME_COLOR,
-    "theme_color": THEME_COLOR,
+    "background_color": "#003366",
+    "theme_color": "#003366",
     "icons": [{"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml"}],
 }
 
-SW_JS = r"""const CACHE = "ytremote-v2";
-const ASSETS = ["/", "/manifest.webmanifest", "/sw.js", "/icon.svg"];
+with open("icon.svg", "r", encoding="utf-8") as f:
+    ICON_SVG = f.read()
 
-self.addEventListener("install", (event) => {
-  event.waitUntil((async () => {
-    const cache = await caches.open(CACHE);
-    await cache.addAll(ASSETS);
-    self.skipWaiting();
-  })());
-});
+with open("sw.js", "r", encoding="utf-8") as f:
+    SW_JS = f.read()
 
-self.addEventListener("activate", (event) => {
-  event.waitUntil((async () => {
-    const keys = await caches.keys();
-    await Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)));
-    self.clients.claim();
-  })());
-});
-
-self.addEventListener("fetch", (event) => {
-  const url = new URL(event.request.url);
-  if (url.pathname.startsWith("/api/")) return; // always network for actions/status
-
-  event.respondWith((async () => {
-    const cache = await caches.open(CACHE);
-    const cached = await cache.match(event.request);
-    if (cached) return cached;
-    try {
-      const res = await fetch(event.request);
-      if (event.request.method === "GET" && res && res.status === 200) {
-        cache.put(event.request, res.clone());
-      }
-      return res;
-    } catch (e) {
-      return (await cache.match("/")) || new Response("Offline", {status: 200});
-    }
-  })());
-});
-"""
-
-ICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#0b0b0b"/>
-  <path d="M165 160h50v192h-50zM297 160l-92 96 92 96v-64h50V224h-50z" fill="#fff" opacity="0.92"/>
-  <path d="M358 210c18 16 18 76 0 92" stroke="#fff" stroke-width="18" fill="none" opacity="0.9" stroke-linecap="round"/>
-</svg>
-"""
+with open("index.html", "r", encoding="utf-8") as f:
+    HTML = f.read()
 
 
-def run_cmd(cmd):
+def run_cmd(cmd: list[str]) -> tuple[int, str]:
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
     return proc.returncode, (proc.stdout + proc.stderr).strip()
 
 
-def run_playerctl(args):
+def run_playerctl(args: list[str]):
     try:
         return run_cmd(BASE_CMD + args)
     except Exception as e:
         return 1, str(e)
 
 
-def run_xdotool_key(keysym):
+def run_xdotool_key(keysym: str) -> tuple[int, str]:
     # Use a shell so we can "export DISPLAY=:0 && ..."
     cmd = ["bash", "-lc", f"export DISPLAY=:0; xdotool key {keysym}"]
     try:
@@ -363,7 +56,7 @@ def run_xdotool_key(keysym):
         return 1, str(e)
 
 
-def run_xdotool_key_to_firefox(keysym):
+def run_xdotool_key_to_firefox(keysym: str) -> tuple[int, str]:
     # active une fenêtre Firefox puis envoie la touche
     # --onlyvisible évite les fenêtres cachées ; --class firefox marche bien en général
     cmd = [
@@ -436,7 +129,7 @@ def set_playback_position(seconds: float):
     return run_playerctl(["position", f"{s}"])
 
 
-def get_status():
+def get_status() -> dict[str, str | int | float | bool]:
     rc1, out1 = run_playerctl(["status"])
     status = out1.strip() if rc1 == 0 else "Unknown"
 
@@ -460,7 +153,9 @@ def get_status():
 
 
 class Handler(BaseHTTPRequestHandler):
-    def _send(self, code, body: bytes, ctype="text/plain; charset=utf-8"):
+    def _send(
+        self, code: int, body: bytes, ctype: str = "text/plain; charset=utf-8"
+    ) -> None:
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
@@ -499,7 +194,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         p = urlparse(self.path).path
-        mapping = {
+        mapping: dict[str, tuple[str, list[str]]] = {
             "/api/play-pause": ("playerctl", ["play-pause"]),
             "/api/next": ("playerctl", ["next"]),
             "/api/previous": ("playerctl", ["previous"]),
@@ -576,7 +271,7 @@ class Handler(BaseHTTPRequestHandler):
             )
             self._send(500, msg)
 
-    def log_message(self, format, *args):
+    def log_message(self, format: str, *args: Any):
         if len(args) >= 1 and "/api/status" in args[0]:
             return  # status would be too verbose
         return  # bon en fait on ne veut rien voir du tout

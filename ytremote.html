@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#003366" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="css/ytremote.css" />
+    <title>remote iMac</title>
+  </head>
+  <body>
+    <div class="page">
+      <div class="now">
+        <div class="title">
+          <span class="pill" id="state">…</span
+          ><span id="track">Aucune piste</span>
+        </div>
+        <div class="artist" id="artist">—</div>
+      </div>
+      <div class="now" style="min-height: auto">
+        <div class="title">
+          <span class="pill">⏱</span>
+          <span id="posLabel">—:— / —:—</span>
+        </div>
+        <input
+          id="pos"
+          type="range"
+          min="0"
+          max="100"
+          value="0"
+          style="width: 100%; margin-top: 12px"
+          oninput="queueSeek(this.value)"
+        />
+      </div>
+
+      <div class="grid">
+        <button onclick="send('/api/previous')">⏮</button>
+        <button onclick="send('/api/play-pause')">⏯</button>
+        <button onclick="send('/api/next')">⏭</button>
+      </div>
+
+      <div class="grid2">
+        <button onclick="send('/api/vol-down')">🔉 −</button>
+        <button onclick="send('/api/vol-up')">🔊 +</button>
+      </div>
+
+      <div class="now" style="min-height: auto">
+        <div class="title">
+          <span class="pill">🔊</span>
+          <span id="volLabel">—%</span>
+          <button
+            style="
+              margin-left: 10px;
+              padding: 10px 14px;
+              font-size: 18px;
+              border-radius: 14px;
+            "
+            onclick="send('/api/mute-toggle')"
+          >
+            🔇 / 🔈
+          </button>
+        </div>
+        <input
+          id="vol"
+          type="range"
+          min="0"
+          max="100"
+          value="50"
+          style="width: 100%; margin-top: 12px"
+          oninput="queueVolume(this.value)"
+        />
+      </div>
+
+      <div class="photos">
+        <div class="photos-title">Photos</div>
+        <div class="grid-photos">
+          <button onclick="send('/api/photos-prev')">⏮</button>
+          <button onclick="send('/api/photos-pause')">⏸</button>
+          <button onclick="send('/api/photos-next')">⏭</button>
+        </div>
+      </div>
+
+      <div class="hint">
+        <a href="mailto:frapi@centrale-lyon.org">Frapi</a> remote iMac<br />
+        installable<br />
+        • iOS Safari : Partager → Sur l’écran d’accueil<br />
+        • Android Chrome : Menu → Installer l’application
+      </div>
+    </div>
+    <script src="js/ytremote.js"></script>
+  </body>
+</html>
