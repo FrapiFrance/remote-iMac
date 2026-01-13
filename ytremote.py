@@ -33,7 +33,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(SCRIPT_DIR, "icon.svg"), "r", encoding="utf-8") as f:
     ICON_SVG = f.read()
 
-with open(os.path.join(SCRIPT_DIR, "sw.js"), "r", encoding="utf-8") as f:
+with open(os.path.join(SCRIPT_DIR, "js", "sw.js"), "r", encoding="utf-8") as f:
     SW_JS = f.read()
 
 with open(os.path.join(SCRIPT_DIR, "index.html"), "r", encoding="utf-8") as f:
