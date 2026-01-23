@@ -77,6 +77,9 @@
 
       <div class="photos">
         <div class="photos-title">Photos</div>
+        <div class="photos-header">
+          <button class="btn-alert" onclick="send('/api/photos-playsignal')" title="Signal">⚠️</button>
+        </div>
         <div class="grid-photos">
           <button onclick="send('/api/photos-prev')">⏮</button>
           <button onclick="send('/api/photos-pause')">⏸</button>

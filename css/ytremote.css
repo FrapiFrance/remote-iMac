@@ -80,6 +80,35 @@
       font-weight: 900;
       margin: 0 0 10px 0;
     }
+    .photos-header{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .btn-alert{
+      height: 28px;
+      min-width: 28px;
+      padding: 0 8px;
+      font-size: 16px;
+      line-height: 1;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.35);
+      background: #8b1e3f; /* amarante */
+      color: #fff;
+      font-weight: 900;
+      box-shadow: 0 4px 10px rgba(0,0,0,.4);
+      cursor: pointer;
+    }
+
+    .btn-alert:hover{
+      background: #a8244a;
+    }
+
+    .btn-alert:active{
+      transform: scale(0.95);
+    }
     .grid-photos{
       width:100%;
       display:grid;

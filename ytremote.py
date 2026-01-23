@@ -222,6 +222,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/photos-prev": ("xdotool_firefox", ["Left"]),
             "/api/photos-next": ("xdotool_firefox", ["Right"]),
             "/api/photos-pause": ("xdotool_firefox", ["Up"]),
+            "/api/photos-playsignal": ("xdotool_firefox", ["Down"]),
         }
         if p not in mapping:
             self._send(404, b"Not found\n")
