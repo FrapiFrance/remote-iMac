@@ -10,82 +10,158 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="css/ytremote.css" />
+
+    <!-- Font Awesome (Free) -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+      referrerpolicy="no-referrer"
+    />
+
     <title>remote iMac</title>
   </head>
+
   <body>
     <div class="page">
-      <div class="now">
-        <div class="title">
-          <span class="pill" id="state">…</span
-          ><span id="track">Aucune piste</span>
+      <!-- Tabs -->
+      <div class="tabs" role="tablist" aria-label="remote-iMac tabs">
+        <button
+          class="tab active"
+          role="tab"
+          aria-selected="true"
+          aria-controls="tab-music"
+          id="tabbtn-music"
+          onclick="uiShowTab('music')"
+          type="button"
+        >
+          <i class="fa-solid fa-music"></i>
+          <span>Musique</span>
+        </button>
+
+        <button
+          class="tab"
+          role="tab"
+          aria-selected="false"
+          aria-controls="tab-photos"
+          id="tabbtn-photos"
+          onclick="uiShowTab('photos')"
+          type="button"
+        >
+          <i class="fa-solid fa-images"></i>
+          <span>Photos</span>
+        </button>
+      </div>
+
+      <!-- =============== MUSIC TAB =============== -->
+      <section class="tab-panel active" id="tab-music" role="tabpanel" aria-labelledby="tabbtn-music">
+        <div class="now">
+          <div class="title">
+            <span class="pill" id="state">…</span><span id="track">Aucune piste</span>
+          </div>
+          <div class="artist" id="artist">—</div>
         </div>
-        <div class="artist" id="artist">—</div>
-      </div>
-      <div class="now" style="min-height: auto">
-        <div class="title">
-          <span class="pill">⏱</span>
-          <span id="posLabel">—:— / —:—</span>
+
+        <div class="now now-compact">
+          <div class="title title-compact">
+            <span class="pill">
+              <i class="fa-regular fa-clock"></i>
+            </span>
+            <span id="posLabel">—:— / —:—</span>
+          </div>
+
+          <input
+            id="pos"
+            type="range"
+            min="0"
+            max="100"
+            value="0"
+            class="slider"
+            oninput="queueSeek(this.value)"
+          />
         </div>
-        <input
-          id="pos"
-          type="range"
-          min="0"
-          max="100"
-          value="0"
-          style="width: 100%; margin-top: 12px"
-          oninput="queueSeek(this.value)"
-        />
-      </div>
 
-      <div class="grid">
-        <button onclick="send('/api/previous')">⏮</button>
-        <button onclick="send('/api/play-pause')">⏯</button>
-        <button onclick="send('/api/next')">⏭</button>
-      </div>
+        <!-- One control row (6 icons) -->
+        <div class="controls-row">
+          <button class="btn-icon btn-md" onclick="send('/api/previous')" aria-label="Précédent" type="button">
+            <i class="fa-solid fa-backward-step"></i>
+          </button>
 
-      <div class="grid2">
-        <button onclick="send('/api/vol-down')">🔉 −</button>
-        <button onclick="send('/api/vol-up')">🔊 +</button>
-      </div>
+          <button class="btn-icon btn-lg btn-primary" onclick="send('/api/play-pause')" aria-label="Lecture / Pause" type="button">
+            <i class="fa-solid fa-play"></i>
+            <!-- ton JS pourra remplacer fa-play par fa-pause selon l'état -->
+          </button>
 
-      <div class="now" style="min-height: auto">
-        <div class="title">
-          <span class="pill">🔊</span>
-          <span id="volLabel">—%</span>
-          <button
-            style="
-              margin-left: 10px;
-              padding: 10px 14px;
-              font-size: 18px;
-              border-radius: 14px;
-            "
-            onclick="send('/api/mute-toggle')"
-          >
-            🔇 / 🔈
+          <button class="btn-icon btn-md" onclick="send('/api/next')" aria-label="Suivant" type="button">
+            <i class="fa-solid fa-forward-step"></i>
+          </button>
+
+          <button class="btn-icon btn-sm btn-secondary" onclick="send('/api/shuffle-toggle')" aria-label="Aléatoire" type="button" id="btnShuffle">
+            <i class="fa-solid fa-shuffle"></i>
+          </button>
+
+          <!-- Volume: tap = ouvrir slider (à implémenter dans JS), double-tap = mute (à implémenter dans JS) -->
+          <button class="btn-icon btn-sm btn-secondary" onclick="uiToggleVolume()" aria-label="Volume" type="button" id="btnVolume">
+            <i class="fa-solid fa-volume-high"></i>
+          </button>
+
+          <button class="btn-icon btn-sm btn-secondary" onclick="uiOpenQueue()" aria-label="File de lecture" type="button">
+            <i class="fa-solid fa-list-music"></i>
           </button>
         </div>
-        <input
-          id="vol"
-          type="range"
-          min="0"
-          max="100"
-          value="50"
-          style="width: 100%; margin-top: 12px"
-          oninput="queueVolume(this.value)"
-        />
-      </div>
 
-      <div class="photos">
-        <div class="photos-header">
-          <div class="photos-title">Photos</div>
-          <button class="btn-alert" onclick="send('/api/photos-playsignal')" title="Signal">⚠️</button>
+        <!-- Volume overlay (hidden by default; JS later) -->
+        <div class="overlay" id="volOverlay" aria-hidden="true">
+          <div class="overlay-card">
+            <div class="overlay-head">
+              <div class="overlay-title">
+                <i class="fa-solid fa-volume-high"></i> <span id="volLabel">—%</span>
+              </div>
+              <button class="btn-close" type="button" onclick="uiToggleVolume()" aria-label="Fermer">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+
+            <input
+              id="vol"
+              type="range"
+              min="0"
+              max="100"
+              value="50"
+              class="slider"
+              oninput="queueVolume(this.value)"
+            />
+
+            <div class="overlay-hint">
+              Tap : afficher/masquer • Double-tap sur 🔊 : mute (JS)
+            </div>
+          </div>
         </div>
-        <div class="grid-photos">
-          <button onclick="send('/api/photos-prev')">⏮</button>
-          <button onclick="send('/api/photos-pause')">⏸</button>
-          <button onclick="send('/api/photos-next')">⏭</button>
+      </section>
+
+      <!-- =============== PHOTOS TAB =============== -->
+      <section class="tab-panel" id="tab-photos" role="tabpanel" aria-labelledby="tabbtn-photos">
+        <div class="photos">
+          <div class="photos-header">
+            <div class="photos-title">Photos</div>
+
+            <button class="btn-alert" onclick="send('/api/photos-playsignal')" title="Signal" type="button" aria-label="Signal">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+            </button>
+          </div>
+
+          <div class="grid-photos">
+            <button onclick="send('/api/photos-prev')" aria-label="Photo précédente" type="button">
+              <i class="fa-solid fa-backward-step"></i>
+            </button>
+            <button onclick="send('/api/photos-pause')" aria-label="Pause / Stop" type="button">
+              <i class="fa-solid fa-pause"></i>
+            </button>
+            <button onclick="send('/api/photos-next')" aria-label="Photo suivante" type="button">
+              <i class="fa-solid fa-forward-step"></i>
+            </button>
+          </div>
         </div>
-      </div>
+      </section>
 
       <div class="hint">
         <a href="mailto:frapi@centrale-lyon.org">Frapi</a> remote iMac<br />
@@ -94,6 +170,46 @@
         • Android Chrome : Menu → Installer l’application
       </div>
     </div>
+
     <script src="js/ytremote.js"></script>
+
+    <!-- Minimal UI helpers (pure front). You can later move into ytremote.js -->
+    <script>
+      function uiShowTab(which) {
+        const musicBtn = document.getElementById("tabbtn-music");
+        const photosBtn = document.getElementById("tabbtn-photos");
+        const music = document.getElementById("tab-music");
+        const photos = document.getElementById("tab-photos");
+
+        const isMusic = which === "music";
+        musicBtn.classList.toggle("active", isMusic);
+        photosBtn.classList.toggle("active", !isMusic);
+        musicBtn.setAttribute("aria-selected", String(isMusic));
+        photosBtn.setAttribute("aria-selected", String(!isMusic));
+        music.classList.toggle("active", isMusic);
+        photos.classList.toggle("active", !isMusic);
+
+        // close overlays when switching
+        const volOverlay = document.getElementById("volOverlay");
+        if (volOverlay) {
+          volOverlay.classList.remove("show");
+          volOverlay.setAttribute("aria-hidden", "true");
+        }
+      }
+
+      function uiToggleVolume() {
+        const el = document.getElementById("volOverlay");
+        if (!el) return;
+        const show = !el.classList.contains("show");
+        el.classList.toggle("show", show);
+        el.setAttribute("aria-hidden", String(!show));
+      }
+
+      function uiOpenQueue() {
+        // Placeholder: you said “later for implementation”.
+        // For now, you can hook a bottom-sheet here.
+        alert("Queue: à implémenter (bottom sheet)");
+      }
+    </script>
   </body>
 </html>
