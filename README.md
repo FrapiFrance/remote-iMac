@@ -12,7 +12,6 @@ L'ordi concerné est sous kubuntu 24.04 (X11 nécessaire)
 
 ![Screenshot](screenshot.jpg){width=50%}
 
-
 ## TODO
 
 - d'abord corriger le problème des photos mal orientées...
