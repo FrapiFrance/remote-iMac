@@ -47,7 +47,28 @@ async function refresh(){
     } else {
       btnRepeat.classList.remove("off");  // on ne distingue pas "one" et "all" visuellement
     }
+    // TODO etat shuffle
+    //const btnShuffle = document.getElementById("btnShuffle");
+    //const shuffleState = s.shuffle_state || "off";
+    //if (shuffleState === "off") {
+    //  btnShuffle.classList.add("off");
+    //} else {
+    //  btnShuffle.classList.remove("off");
+    //}
 
+    // position / durée
+    if (typeof s.length === "number" && s.length > 0) {
+      const pos = (typeof s.pos === "number") ? s.pos : 0;
+      document.getElementById('pos').max = s.length;
+      document.getElementById('pos').value = Math.min(Math.max(0, pos), s.length);
+      document.getElementById('posLabel').textContent = `${fmtTime(pos)} / ${fmtTime(s.length)}`;
+      // mettre la progression dans le titre (onglet + PWA)
+      document.title = `remote iMac — ${s.title} — ${fmtTime(pos)}/${fmtTime(s.length)}`;
+    } else {
+      document.getElementById('posLabel').textContent = "—:— / —:—";
+      document.title = "remote iMac — " + (s.title || "Aucune piste");
+    }
+    
     // état playlist
     if (typeof window.currentPlaylistIdLastForced === "number") {
       // si on a forcé une playlist récemment, on ne met pas à jour
@@ -66,19 +87,6 @@ async function refresh(){
       window.currentPlaylistId = s.playlist_id || null;
     }
     await uiUpdatePlaylistLabel();
-
-    // position / durée
-    if (typeof s.length === "number" && s.length > 0) {
-      const pos = (typeof s.pos === "number") ? s.pos : 0;
-      document.getElementById('pos').max = s.length;
-      document.getElementById('pos').value = Math.min(Math.max(0, pos), s.length);
-      document.getElementById('posLabel').textContent = `${fmtTime(pos)} / ${fmtTime(s.length)}`;
-      // mettre la progression dans le titre (onglet + PWA)
-      document.title = `remote iMac — ${s.title} — ${fmtTime(pos)}/${fmtTime(s.length)}`;
-    } else {
-      document.getElementById('posLabel').textContent = "—:— / —:—";
-      document.title = "remote iMac — " + (s.title || "Aucune piste");
-    }
 
   } catch(e) {}
   }

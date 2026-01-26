@@ -17,7 +17,6 @@ L'ordi concerné est sous kubuntu 24.04 (X11 nécessaire)
 - d'abord corriger le problème des photos mal orientées...
 - passer remote en service user
 
-- listbox playlist, avec bascule via  [changeVideo](https://ytmdesktop.github.io/developer/companion-server/reference/v1/command.html#change-video)
-- listbox queue en cours
+- listbox queue en cours avec bascule via  [changeVideo](https://ytmdesktop.github.io/developer/companion-server/reference/v1/command.html#change-video)
 - gestion du shuffle pas conforme à la spec...
 - thumbnail éventuellement, mais bon bof
