@@ -276,8 +276,9 @@ function uiRenderQueue() {
   }
 
   // option: auto-scroll sur l’item selected
-  const sel = listEl.querySelector(".qitem.selected");
-  if (sel) sel.scrollIntoView({ block: "center" });
+  // trop chiant !
+  // const sel = listEl.querySelector(".qitem.selected");
+  // if (sel) sel.scrollIntoView({ block: "center" });
 }
 
 async function uiSelectQueueItem(videoId) {

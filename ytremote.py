@@ -218,8 +218,11 @@ def get_ytmd_playlist(resetCache: bool = False) -> dict | None:
         ytmd_data = get_ytmd_playlist._cache
 
     playlists = {}
-    for p in ytmd_data:
-        playlists[p.get("id", "")] = p.get("title", "")
+    try:
+        for p in ytmd_data:
+            playlists[p.get("id", "")] = p.get("title", "")
+    except Exception:
+        pass
 
     return playlists  # type: ignore
 
