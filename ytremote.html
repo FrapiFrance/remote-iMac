@@ -112,7 +112,7 @@
             <i class="fa-solid fa-repeat"></i>
           </button>
 
-          <button class="btn-icon btn-sm btn-secondary" onclick="uiOpenQueue()" aria-label="File de lecture" type="button">
+          <button class="btn-icon btn-sm btn-secondary" onclick="uiToggleQueue()" aria-label="File de lecture" type="button">
             <i class="fa-solid fa-list"></i>
           </button>
         </div>
@@ -144,6 +144,7 @@
             </div>
           </div>
         </div>
+        <!-- Playlists overlay (hidden by default; JS later) -->
         <div class="overlay" id="plOverlay" aria-hidden="true">
         <div class="overlay-card">
           <div class="overlay-head">
@@ -162,6 +163,26 @@
           </div>
         </div>
       </div>
+      <div class="overlay" id="qOverlay" aria-hidden="true">
+      <!-- Queue overlay (hidden by default; JS later) -->
+      <div class="overlay-card">
+        <div class="overlay-head">
+          <div class="overlay-title">
+            <i class="fa-solid fa-list"></i> <span>File de lecture</span>
+          </div>
+          <button class="btn-close" type="button" onclick="uiToggleQueue()" aria-label="Fermer">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <div class="qlist" id="qlist"></div>
+
+        <div class="overlay-hint">
+          Tap sur un morceau pour basculer dessus
+        </div>
+      </div>
+    </div>
+
 
       </section>
 

@@ -243,6 +243,55 @@ button{
   border-color: rgba(255,255,255,.22);
 }
 
+/* Queue list inside overlay */
+.qlist{
+  margin-top: 12px;
+  display:flex;
+  flex-direction:column;
+  gap: 10px;
+  max-height: min(70vh, 520px);
+  overflow:auto;
+  padding-right: 2px;
+}
+
+.qitem{
+  width: 100%;
+  text-align:left;
+  border: 2px solid rgba(255,255,255,.14);
+  border-radius: 14px;
+  background: rgba(255,255,255,.10);
+  color:#fff;
+  padding: 10px 12px;
+  cursor:pointer;
+}
+
+.qitem .qtitle{
+  font-weight: 900;
+  line-height: 1.2;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+}
+
+.qitem .qauthor{
+  margin-top: 3px;
+  opacity: .75;
+  font-size: 12px;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+}
+
+.qitem.selected{
+  background:#66A0D3;
+  color:#000;
+  border-color: rgba(255,255,255,.22);
+}
+
+.qitem.selected .qauthor{
+  opacity: .85;
+}
+
 
 /* Photos block */
 .photos{

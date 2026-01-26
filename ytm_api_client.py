@@ -34,6 +34,9 @@ def ytmdesktop_api_call(  # type: ignore
         url = f"{baseUrl}{action}"
         status = requests.get(url, headers={"Authorization": token})
         state = json.loads(status.content)
+        for header, value in status.headers.items():
+            if header.lower().startswith("x-ratelimit-"):
+                print(f"{action} {header}: {value}")
         with open(script_dir / "run" / f"{action}.json", "w") as f:
             json.dump(state, f, indent=2, ensure_ascii=False)
         return status.status_code == 200, state
@@ -45,11 +48,11 @@ def ytmdesktop_api_call(  # type: ignore
         if action == "changeVideo":
             # for changeVideo,  data is a dict with playlistId and videoId (those present)
             json_data["data"] = {}
-            if playlistId is not None:
+            if playlistId is not None and playlistId != "None":
                 json_data["data"]["playlistId"] = playlistId
-            if videoId is not None:
+            if videoId is not None and videoId != "None":
                 json_data["data"]["videoId"] = videoId
-        elif data is not None:
+        elif data is not None and data != "None":
             json_data["data"] = data
         print(f"YTMD API command data: {json_data}")
         status = requests.post(

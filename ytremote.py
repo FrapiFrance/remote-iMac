@@ -14,7 +14,7 @@ from ytm_api_client import ytmdesktop_api_call  # type: ignore
 HOST = "0.0.0.0"
 PORT = 8000
 
-YTMD_CACHE_DELAY = 30  # secondes (* 60 pour liste des playlists, donc 30 minutes)
+YTMD_CACHE_DELAY = 3  # secondes (* 60 pour liste des playlists, donc 30 minutes)
 
 # Si tu veux cibler un player précis, décommente et ajuste :
 # PLAYER = "youtube-music-desktop-app"

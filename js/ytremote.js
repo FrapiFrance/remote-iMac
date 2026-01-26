@@ -90,6 +90,10 @@ async function refresh(){
 
     // etat queue
     window.currentQueue = s.queue || []; // list of {"title":..., "author":..., "videoId":..., "selected":false/true}
+    const qOverlay = document.getElementById("qOverlay");
+    if (qOverlay && qOverlay.classList.contains("show")) {
+      uiRenderQueue();
+    }
 
   } catch(e) {}
   }
@@ -159,19 +163,6 @@ async function setSeek(v){
     // optionnel: alert(e)
   }
 }
-
-(function () {
-  const overlay = document.getElementById("volOverlay");
-  if (!overlay) return;
-
-  // clic sur le fond sombre => fermer
-  overlay.addEventListener("click", function (e) {
-    if (e.target === overlay) {
-      overlay.classList.remove("show");
-      overlay.setAttribute("aria-hidden", "true");
-    }
-  });
-})();
 
 document
   .querySelector("#volOverlay .overlay-card")
@@ -247,10 +238,74 @@ function uiToggleVolume() {
 })();
 
 
-function uiOpenQueue() {
-  // Placeholder: you said “later for implementation”.
-  // For now, you can hook a bottom-sheet here.
-  alert("Queue: à implémenter (bottom sheet)");
+function uiToggleQueue() {
+  const overlay = document.getElementById("qOverlay");
+  if (!overlay) return;
+
+  const show = !overlay.classList.contains("show");
+  overlay.classList.toggle("show", show);
+  overlay.setAttribute("aria-hidden", String(!show));
+
+  if (show) uiRenderQueue();
+}
+
+function uiRenderQueue() {
+  const listEl = document.getElementById("qlist");
+  if (!listEl) return;
+
+  const q = window.currentQueue || [];
+  if (!q.length) {
+    listEl.innerHTML = '<div style="opacity:.7">File vide</div>';
+    return;
+  }
+
+  listEl.innerHTML = "";
+  for (const item of q) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "qitem" + (item.selected ? " selected" : "");
+
+    btn.innerHTML = `
+      <div class="qtitle">${escapeHtml(item.title || item.videoId || "—")}</div>
+      <div class="qauthor">${escapeHtml(item.author || "")}</div>
+    `;
+
+    btn.addEventListener("click", () => uiSelectQueueItem(item.videoId));
+    listEl.appendChild(btn);
+  }
+
+  // option: auto-scroll sur l’item selected
+  const sel = listEl.querySelector(".qitem.selected");
+  if (sel) sel.scrollIntoView({ block: "center" });
+}
+
+async function uiSelectQueueItem(videoId) {
+  if (!videoId) return;
+
+  try {
+    const r = await fetch("/api/playlist-track-set", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({  trackId: videoId }),
+    });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+
+    // feedback optimiste: marquer selected localement (en attendant le refresh)
+    if (Array.isArray(window.currentQueue)) {
+      for (const it of window.currentQueue) it.selected = (it.videoId === videoId);
+    }
+    uiRenderQueue();
+    uiToggleQueue(); // ferme l’overlay après sélection
+  } catch (e) {
+    alert("Impossible de sélectionner ce morceau",e);
+  }
+}
+
+// petit helper pour éviter d’injecter du HTML depuis les titres
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[c]));
 }
 
 async function uiTogglePlaylists() {
@@ -358,7 +413,7 @@ async function uiSelectPlaylist(id) {
     uiTogglePlaylists();
   } catch (e) {
     // Option: afficher une mini erreur
-    alert("Impossible de sélectionner la playlist");
+    alert("Impossible de sélectionner la playlist",e);
   }
 }
 
@@ -369,6 +424,29 @@ async function uiSelectPlaylist(id) {
     if (e.target === overlay) uiTogglePlaylists();
   });
 })();
+
+(function () {
+  const overlay = document.getElementById("qOverlay");
+  if (!overlay) return;
+
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) uiToggleQueue();
+  });
+})();
+
+(function () {
+  const overlay = document.getElementById("volOverlay");
+  if (!overlay) return;
+
+  // clic sur le fond sombre => fermer
+  overlay.addEventListener("click", function (e) {
+    if (e.target === overlay) {
+      overlay.classList.remove("show");
+      overlay.setAttribute("aria-hidden", "true");
+    }
+  });
+})();
+
 
 window.currentPlaylistIdLastForced = null;
 
