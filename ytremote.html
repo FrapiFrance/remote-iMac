@@ -55,8 +55,9 @@
       <!-- =============== MUSIC TAB =============== -->
       <section class="tab-panel active" id="tab-music" role="tabpanel" aria-labelledby="tabbtn-music">
         <div class="now">
+          <div class="playlist" id="playlist"></div>
           <div class="title">
-            <span class="pill" id="state">…</span><span id="track">Aucune piste</span>
+            <span id="track">Aucune piste</span>
           </div>
           <div class="artist" id="artist">—</div>
         </div>
@@ -88,24 +89,27 @@
 
           <button class="btn-icon btn-lg btn-primary" onclick="send('/api/play-pause')" aria-label="Lecture / Pause" type="button">
             <i class="fa-solid fa-play"></i>
-            <!-- ton JS pourra remplacer fa-play par fa-pause selon l'état -->
           </button>
 
           <button class="btn-icon btn-md" onclick="send('/api/next')" aria-label="Suivant" type="button">
             <i class="fa-solid fa-forward-step"></i>
           </button>
 
-          <button class="btn-icon btn-sm btn-secondary" onclick="send('/api/shuffle-toggle')" aria-label="Aléatoire" type="button" id="btnShuffle">
-            <i class="fa-solid fa-shuffle"></i>
-          </button>
-
-          <!-- Volume: tap = ouvrir slider (à implémenter dans JS), double-tap = mute (à implémenter dans JS) -->
-          <button class="btn-icon btn-sm btn-secondary" onclick="uiToggleVolume()" aria-label="Volume" type="button" id="btnVolume">
+          <button class="btn-icon btn-sm" onclick="uiToggleVolume()" aria-label="Volume" type="button" id="btnVolume">
             <i class="fa-solid fa-volume-high"></i>
           </button>
 
+          <button class="btn-icon btn-sm btn-secondary off" onclick="send('/api/shuffle'); this.classList.remove('off')" aria-label="Aléatoire" type="button" id="btnShuffle">
+            <i class="fa-solid fa-shuffle"></i>
+            <!-- quand chgt PlayList, penser à remettre off -->
+          </button>
+
+          <button class="btn-icon btn-sm btn-secondary off" onclick="toggleRepeat()" aria-label="Aléatoire" type="button" id="btnRepeat">
+            <i class="fa-solid fa-repeat"></i>
+          </button>
+
           <button class="btn-icon btn-sm btn-secondary" onclick="uiOpenQueue()" aria-label="File de lecture" type="button">
-            <i class="fa-solid fa-list-music"></i>
+            <i class="fa-solid fa-list"></i>
           </button>
         </div>
 
@@ -132,7 +136,7 @@
             />
 
             <div class="overlay-hint">
-              Tap : afficher/masquer • Double-tap sur 🔊 : mute (JS)
+              Tap : afficher/masquer • 0 : mute
             </div>
           </div>
         </div>
@@ -164,52 +168,13 @@
       </section>
 
       <div class="hint">
-        <a href="mailto:frapi@centrale-lyon.org">Frapi</a> remote iMac<br />
+        <a href="mailto:frapi@centrale-lyon.org">Frapi</a> <a href="https://github.com/FrapiFrance/remote-iMac">remote iMac</a><br />
         installable<br />
         • iOS Safari : Partager → Sur l’écran d’accueil<br />
         • Android Chrome : Menu → Installer l’application
       </div>
     </div>
 
-    <script src="js/ytremote.js"></script>
-
-    <!-- Minimal UI helpers (pure front). You can later move into ytremote.js -->
-    <script>
-      function uiShowTab(which) {
-        const musicBtn = document.getElementById("tabbtn-music");
-        const photosBtn = document.getElementById("tabbtn-photos");
-        const music = document.getElementById("tab-music");
-        const photos = document.getElementById("tab-photos");
-
-        const isMusic = which === "music";
-        musicBtn.classList.toggle("active", isMusic);
-        photosBtn.classList.toggle("active", !isMusic);
-        musicBtn.setAttribute("aria-selected", String(isMusic));
-        photosBtn.setAttribute("aria-selected", String(!isMusic));
-        music.classList.toggle("active", isMusic);
-        photos.classList.toggle("active", !isMusic);
-
-        // close overlays when switching
-        const volOverlay = document.getElementById("volOverlay");
-        if (volOverlay) {
-          volOverlay.classList.remove("show");
-          volOverlay.setAttribute("aria-hidden", "true");
-        }
-      }
-
-      function uiToggleVolume() {
-        const el = document.getElementById("volOverlay");
-        if (!el) return;
-        const show = !el.classList.contains("show");
-        el.classList.toggle("show", show);
-        el.setAttribute("aria-hidden", String(!show));
-      }
-
-      function uiOpenQueue() {
-        // Placeholder: you said “later for implementation”.
-        // For now, you can hook a bottom-sheet here.
-        alert("Queue: à implémenter (bottom sheet)");
-      }
-    </script>
+    <script src="js/ytremote.js"></script>>
   </body>
 </html>

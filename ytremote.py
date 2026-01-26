@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # avec photos : Précédent / Pause / Suivant
+from datetime import datetime
 import json
 import subprocess
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -7,9 +8,13 @@ from typing import Any
 from urllib.parse import urlparse
 import re
 import os
+import time
+from ytm_api_client import ytmdesktop_api_call  # type: ignore
 
 HOST = "0.0.0.0"
 PORT = 8000
+
+YTMD_CACHE_DELAY = 30  # secondes
 
 # Si tu veux cibler un player précis, décommente et ajuste :
 # PLAYER = "youtube-music-desktop-app"
@@ -56,6 +61,12 @@ def run_playerctl(args: list[str]):
         return run_cmd(BASE_CMD + args)
     except Exception as e:
         return 1, str(e)
+
+
+def run_ytmdesktop_api_call(args: list[str | None]) -> tuple[int, dict | None]:
+    ok, data = ytmdesktop_api_call(*args)
+    print(f"{datetime.now()} YTMD call {args} returned ok={ok}")
+    return (0 if ok else 1), data
 
 
 def run_xdotool_key(keysym: str) -> tuple[int, str]:
@@ -105,11 +116,6 @@ def get_system_volume():
     return (vol if vol is not None else 0, muted)
 
 
-def set_system_volume(value_0_100: int):
-    v = max(0, min(100, int(value_0_100)))
-    return run_cmd(["bash", "-lc", f"pactl set-sink-volume @DEFAULT_SINK@ {v}%"])
-
-
 def get_playback_position_and_length():
     # position: seconds (float), length: seconds (int) if known
     rc_pos, out_pos = run_playerctl(["position"])
@@ -139,7 +145,64 @@ def set_playback_position(seconds: float):
     return run_playerctl(["position", f"{s}"])
 
 
-def get_status() -> dict[str, str | int | float | bool]:
+def get_ytmd_status(resetCache: bool = False) -> dict | None:
+    # Call YTMD API for playlist, queue and repeat state (cached for 30 seconds)
+    if (
+        not hasattr(get_ytmd_status, "_cache")
+        or time.time() - get_ytmd_status._cache_time > YTMD_CACHE_DELAY
+        or resetCache
+    ):
+        rc, ytmd_data = run_ytmdesktop_api_call(["info", "state"])
+        get_ytmd_status._cache = ytmd_data or {}
+        get_ytmd_status._cache_time = time.time()
+        print(
+            f"{datetime.now()} YTMD data refreshed repeat mode: {ytmd_data.get('player', {}).get('queue', {}).get('repeatMode', 0)}"
+        )
+    else:
+        ytmd_data = get_ytmd_status._cache
+
+    rm = (
+        ytmd_data.get("player", {}).get("queue", {}).get("repeatMode", 0)
+        if isinstance(ytmd_data, dict)
+        else 0
+    )
+    if rm == 0:
+        repeat_state = "no"
+    elif rm == 1:
+        repeat_state = "all"
+    elif rm == 2:
+        repeat_state = "one"
+    else:
+        repeat_state = "no"
+
+    playlist_id = ytmd_data.get("playlistId", "") if isinstance(ytmd_data, dict) else ""
+
+    queue = (
+        ytmd_data.get("player", {}).get("queue", {}).get("items", [])
+        if isinstance(ytmd_data, dict)
+        else []
+    )
+
+    queue_pos = (
+        ytmd_data.get("player", {}).get("queue", {}).get("selectedItemIndex", -1)
+        if isinstance(ytmd_data, dict)
+        else -1
+    )
+
+    # thumbnail_url = ( not that simple
+    #    ytmd_data.get("thumbnail", "") if isinstance(ytmd_data, dict) else ""
+    # )
+
+    return {
+        "repeat_state": repeat_state,
+        "playlist_id": playlist_id,
+        "queue": queue,
+        "queue_pos": queue_pos,
+        # "thumbnail_url": thumbnail_url,
+    }  # type: ignore
+
+
+def get_status(resetCache: bool = False) -> dict[str, str | int | float | bool]:
     rc1, out1 = run_playerctl(["status"])
     status = out1.strip() if rc1 == 0 else "Unknown"
 
@@ -151,6 +214,9 @@ def get_status() -> dict[str, str | int | float | bool]:
         artist = parts[1].strip() if len(parts) > 1 else ""
     vol, muted = get_system_volume()
     pos, length = get_playback_position_and_length()
+
+    ytmd_data = get_ytmd_status(resetCache=resetCache)
+
     return {
         "status": status,
         "title": title,
@@ -159,6 +225,12 @@ def get_status() -> dict[str, str | int | float | bool]:
         "muted": muted,
         "pos": pos,  # seconds (float)
         "length": length,  # seconds (int, 0 if unknown)
+        "repeat_state": ytmd_data["repeat_state"],  # possible: "no", "one", "all"
+        "playlist_id": ytmd_data["playlist_id"],  # string or empty
+        "queue": ytmd_data[
+            "queue"
+        ],  # list of {"title":..., "artist":..., "videoId":...} # type: ignore
+        "queue_pos": ytmd_data["queue_pos"],  # int index in queue or -1 if unknown
     }
 
 
@@ -216,13 +288,16 @@ class Handler(BaseHTTPRequestHandler):
             "/api/previous": ("playerctl", ["previous"]),
             "/api/vol-up": ("xdotool", ["XF86AudioRaiseVolume"]),
             "/api/vol-down": ("xdotool", ["XF86AudioLowerVolume"]),
-            "/api/vol-set": ("pactl", []),
-            "/api/mute-toggle": ("pactl", ["toggle-mute"]),
-            "/api/seek-set": ("playerctl", []),
+            "/api/vol-set": ("forced_infra", []),
+            "/api/mute-toggle": ("forced_infra", []),
+            "/api/seek-set": ("forced_infra", []),
             "/api/photos-prev": ("xdotool_firefox", ["Left"]),
             "/api/photos-next": ("xdotool_firefox", ["Right"]),
             "/api/photos-pause": ("xdotool_firefox", ["Up"]),
             "/api/photos-playsignal": ("xdotool_firefox", ["Down"]),
+            "/api/shuffle": ("ytmdesktop", ["command", "shuffle"]),
+            "/api/repeat": ("forced_infra", []),
+            "/api/playlists": ("ytmdesktop", ["info", "playlists"]),
         }
         if p not in mapping:
             self._send(404, b"Not found\n")
@@ -238,14 +313,36 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, b"Bad JSON\n")
                 return
 
-            rc, out = set_system_volume(val)
+            v = max(0, min(100, val))
+
+            # Rule:
+            # - volume == 0 => mute ON
+            # - volume  > 0 => mute OFF
+            if v == 0:
+                rc_m, out_m = run_cmd(
+                    ["bash", "-lc", "pactl set-sink-mute @DEFAULT_SINK@ 1"]
+                )
+                if rc_m != 0:
+                    self._send(500, (out_m + "\n").encode("utf-8", "ignore"))
+                    return
+            else:
+                rc_u, out_u = run_cmd(
+                    ["bash", "-lc", "pactl set-sink-mute @DEFAULT_SINK@ 0"]
+                )
+                if rc_u != 0:
+                    self._send(500, (out_u + "\n").encode("utf-8", "ignore"))
+                    return
+
+            rc, out = run_cmd(
+                ["bash", "-lc", f"pactl set-sink-volume @DEFAULT_SINK@ {v}%"]
+            )
             if rc == 0:
                 self._send(200, b"OK\n")
             else:
                 self._send(500, (out + "\n").encode("utf-8", "ignore"))
             return
-
         if p == "/api/mute-toggle":
+            # unused (mute by volume 0), but kept for compatibility
             rc, out = run_cmd(
                 ["bash", "-lc", "pactl set-sink-mute @DEFAULT_SINK@ toggle"]
             )
@@ -271,10 +368,43 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self._send(500, (out + "\n").encode("utf-8", "ignore"))
             return
+        if p == "/api/repeat":
+            # toggle repeat mode
+            status = get_status()
+            current = status.get("repeat_state", "no")
+            if current == "no":
+                new_mode = (
+                    "1"  # all (we won't go to "one" loop, because it's less useful)
+                )
+            else:
+                new_mode = "0"  # one
+
+            kind, args = mapping[p]
+            args = [  # type: ignore
+                "command",
+                "repeatMode",
+                None,
+                None,
+                new_mode,
+            ]
+
+            rc, out = run_ytmdesktop_api_call(args)
+            if rc == 0:
+                self._send(200, b"OK\n")
+            else:
+                msg = (f"{kind} error: " + (out or "unknown") + "\n").encode(
+                    "utf-8", "ignore"
+                )
+                self._send(500, msg)
+            get_status(resetCache=True)
+            return
 
         kind, args = mapping[p]
         if kind == "playerctl":
             rc, out = run_playerctl(args)
+        elif kind == "ytmdesktop":
+            rc, out = run_ytmdesktop_api_call(args)  # type: ignore
+            out = str(out) if out is not None else ""  # type: ignore
         elif kind == "xdotool_firefox":
             rc, out = run_xdotool_key_to_firefox(args[0])
         else:
@@ -289,10 +419,13 @@ class Handler(BaseHTTPRequestHandler):
             self._send(500, msg)
 
     def log_message(self, format: str, *args: Any):
-        if len(args) >= 1 and "/api/status" in args[0]:
-            return  # status would be too verbose
-        return  # bon en fait on ne veut rien voir du tout
-        super().log_message(format, *args)
+        try:
+            if len(args) >= 1 and "/api/status" in args[0]:
+                return  # status would be too verbose
+            return  # bon en fait on ne veut rien voir du tout
+            super().log_message(format, *args)
+        except:
+            pass
 
 
 if __name__ == "__main__":

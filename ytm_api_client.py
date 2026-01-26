@@ -1,44 +1,62 @@
 #!/usr/bin/env python3
+# very basic YTMDesktop Companion Server API client
+from datetime import datetime
 import requests
 import json
+import os
+from pathlib import Path
 
-BASE_URL = "http://localhost:9863/api/v1/"
+BASE_URL = "http://localhost:9863/api/v1/"  # standard URL for YTMD API
 
-with open("./run/config.json", "r") as f:
+script_dir = Path(__file__).parent
+config_path = script_dir / "run" / "config.json"
+
+with open(config_path, "r") as f:
     config = json.load(f)
     token = config["token"]
     # see https://ytmdesktop.github.io/developer/companion-server/reference/v1/auth-requestcode.html
     # to get the token
-
-mode = "info"
-info = "playlists"
-info = "state"
-
-mode = "command"
-command = "playPause"
-command = "next"
+    baseUrl = config.get("baseUrl", BASE_URL)
 
 
-if mode == "info":
-    url = f"{BASE_URL}{info}"
-    status = requests.get(url, headers={"Authorization": token})
-    state = json.loads(status.content)
-    if info == "state":
-        # to reduce output size
-        state["player"]["queue"] = None
-        state["video"]["thumbnails"] = None
-    print(json.dumps(state, indent=2, ensure_ascii=False))
-else:
-    url = f"{BASE_URL}command"
-    status = requests.post(
-        url,
-        headers={"Authorization": token},
-        json={
-            "command": command,
-        },
+def ytmdesktop_api_call(  # type: ignore
+    mode: str,
+    action: str,
+    playlistId: str | None = None,  # for changeVideo
+    videoId: str | None = None,  # for changeVideo
+    data: str | None = None,  # for repeat, or some other commands
+) -> tuple[bool, dict | None]:  # type: ignore
+    print(
+        f"{datetime.now()} YTMD API call: mode={mode}, action={action}, playlistId={playlistId}, videoId={videoId} data={data}"
     )
-    if status.status_code == 204:
-        print("Command executed successfully.")
-    else:
+    if mode == "info":
+        url = f"{baseUrl}{action}"
+        status = requests.get(url, headers={"Authorization": token})
         state = json.loads(status.content)
-        print(json.dumps(state, indent=2, ensure_ascii=False))
+        with open(script_dir / "run" / "status.json", "w") as f:
+            json.dump(state, f, indent=2, ensure_ascii=False)
+        return status.status_code == 200, state
+    elif mode == "command":
+        url = f"{baseUrl}command"
+        json_data = {
+            "command": action,
+        }
+        if action == "changeVideo":
+            # for changeVideo,  data is a dict with playlistId and videoId (those present)
+            json_data["data"] = {}
+            if playlistId is not None:
+                json_data["data"]["playlistId"] = playlistId
+            if videoId is not None:
+                json_data["data"]["videoId"] = videoId
+        elif data is not None:
+            json_data["data"] = data
+        print(f"YTMD API command data: {json_data}")
+        status = requests.post(
+            url,
+            headers={"Authorization": token},
+            json=json_data,
+        )
+        return status.status_code == 204, None
+    else:
+        raise ValueError("Invalid mode")
+    return False, None
