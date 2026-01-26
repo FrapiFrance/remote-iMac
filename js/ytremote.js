@@ -68,7 +68,7 @@ async function refresh(){
       document.getElementById('posLabel').textContent = "—:— / —:—";
       document.title = "remote iMac — " + (s.title || "Aucune piste");
     }
-    
+
     // état playlist
     if (typeof window.currentPlaylistIdLastForced === "number") {
       // si on a forcé une playlist récemment, on ne met pas à jour
@@ -87,6 +87,9 @@ async function refresh(){
       window.currentPlaylistId = s.playlist_id || null;
     }
     await uiUpdatePlaylistLabel();
+
+    // etat queue
+    window.currentQueue = s.queue || []; // list of {"title":..., "author":..., "videoId":..., "selected":false/true}
 
   } catch(e) {}
   }

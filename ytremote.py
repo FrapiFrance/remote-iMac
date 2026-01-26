@@ -179,12 +179,17 @@ def get_ytmd_status(resetCache: bool = False) -> dict | None:
         if isinstance(ytmd_data, dict)
         else []
     )
-
-    queue_pos = (
-        ytmd_data.get("player", {}).get("queue", {}).get("selectedItemIndex", -1)
-        if isinstance(ytmd_data, dict)
-        else -1
-    )
+    // simplify queue items
+    simple_queue = []
+    for item in queue:
+        simple_queue.append(
+            {
+                "title": item.get("title", ""),
+                "author": item.get("author", ""),
+                "videoId": item.get("videoId", ""),
+                "selected": item.get("selected", False),
+            }
+        )
 
     # thumbnail_url = ( not that simple
     #    ytmd_data.get("thumbnail", "") if isinstance(ytmd_data, dict) else ""
@@ -193,8 +198,7 @@ def get_ytmd_status(resetCache: bool = False) -> dict | None:
     return {
         "repeat_state": repeat_state,
         "playlist_id": playlist_id,
-        "queue": queue,
-        "queue_pos": queue_pos,
+        "queue": simple_queue,
         # "thumbnail_url": thumbnail_url,
     }  # type: ignore
 
@@ -247,8 +251,7 @@ def get_status(resetCache: bool = False) -> dict[str, str | int | float | bool]:
         "playlist_id": ytmd_data["playlist_id"],  # string or empty
         "queue": ytmd_data[
             "queue"
-        ],  # list of {"title":..., "artist":..., "videoId":...} # type: ignore
-        "queue_pos": ytmd_data["queue_pos"],  # int index in queue or -1 if unknown
+        ],  # list of {"title":..., "author":..., "videoId":..., "selected":false/true} # type: ignore
     }
 
 
