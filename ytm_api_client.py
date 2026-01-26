@@ -26,9 +26,10 @@ def ytmdesktop_api_call(  # type: ignore
     videoId: str | None = None,  # for changeVideo
     data: str | None = None,  # for repeat, or some other commands
 ) -> tuple[bool, dict | None]:  # type: ignore
-    print(
-        f"{datetime.now()} YTMD API call: mode={mode}, action={action}, playlistId={playlistId}, videoId={videoId} data={data}"
-    )
+    if (mode, action) != ("info", "state"):
+        print(
+            f"{datetime.now()} YTMD API call: mode={mode}, action={action}, playlistId={playlistId}, videoId={videoId} data={data}"
+        )
     if mode == "info":
         url = f"{baseUrl}{action}"
         status = requests.get(url, headers={"Authorization": token})

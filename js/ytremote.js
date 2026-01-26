@@ -48,9 +48,24 @@ async function refresh(){
       btnRepeat.classList.remove("off");  // on ne distingue pas "one" et "all" visuellement
     }
 
-    // FIXME : wip
-    document.getElementById('playlist').textContent = s.playlist_id || "—";
-
+    // état playlist
+    if (typeof window.currentPlaylistIdLastForced === "number") {
+      // si on a forcé une playlist récemment, on ne met pas à jour
+      //  (car /api/status renvoie une version cachée 30 secondes)
+      // console.log("have last forced timestamp:", window.currentPlaylistIdLastForced);
+      const elapsed = Date.now() - window.currentPlaylistIdLastForced;
+      if (elapsed < 31000) {
+        // console.log("skip playlist id update, forced recently");
+      } else {
+        // console.log("clear last forced timestamp");
+        window.currentPlaylistIdLastForced = null;
+        window.currentPlaylistId = s.playlist_id || null;
+      }
+    } else {
+      // console.log("normal playlist id update");
+      window.currentPlaylistId = s.playlist_id || null;
+    }
+    await uiUpdatePlaylistLabel();
 
     // position / durée
     if (typeof s.length === "number" && s.length > 0) {
@@ -227,11 +242,124 @@ function uiOpenQueue() {
   alert("Queue: à implémenter (bottom sheet)");
 }
 
-function uiOpenPlaylists() {
-  // Placeholder: you said “later for implementation”.
-  // For now, you can hook a bottom-sheet here.
-  alert("Playlists: à implémenter (bottom sheet)");
+async function uiTogglePlaylists() {
+  const overlay = document.getElementById("plOverlay");
+  if (!overlay) return;
+
+  const show = !overlay.classList.contains("show");
+  overlay.classList.toggle("show", show);
+  overlay.setAttribute("aria-hidden", String(!show));
+
+  if (show) {
+    await uiLoadPlaylists();
+  }
 }
+
+async function uiUpdatePlaylistLabel() {
+  const el = document.getElementById("playlist");
+  if (!el) return;
+
+  const id = window.currentPlaylistId;
+  if (!id) {
+    el.textContent = "—";
+    return;
+  }
+
+  try {
+    const title = window.playlistsById[id];
+    // console.log("normal playlist id update:", id, title);
+    el.textContent = title; 
+  } catch (e) {
+    // si pas trouvé, recharger la liste des playlists
+    // console.log("playlist id not found, reloading playlists for ", id);
+    await getPlaylists();
+    try {
+      const title = window.playlistsById[id];
+      el.textContent = title; 
+    } catch (e) {
+      // console.log("still not found playlist id:", id);
+      el.textContent = id; // fallback si pas réussi à charger la liste
+    }
+  }
+}
+
+
+async function getPlaylists() {
+  let data;
+  try {
+    const r = await fetch("/api/playlists", { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    data = await r.json(); // dict id -> title
+    window.playlistsById = data || {};
+
+  } catch (e) {
+    listEl.innerHTML = '<div style="opacity:.7">Erreur chargement playlists</div>';
+    return;
+  }
+}
+
+async function uiLoadPlaylists() {
+  const listEl = document.getElementById("plist");
+  if (!listEl) return;
+
+  listEl.innerHTML = '<div style="opacity:.7">Chargement…</div>';
+
+  await getPlaylists();
+
+  const current = window.currentPlaylistId;
+  const entries = Object.entries(window.playlistsById || {}); // [[id,title],...]
+
+  // Optionnel : tri alpha par titre
+  entries.sort((a,b) => String(a[1]).localeCompare(String(b[1]), "fr", { sensitivity: "base" }));
+
+  listEl.innerHTML = "";
+  for (const [id, title] of entries) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = title || id;
+    if (current && String(id) === String(current)) btn.classList.add("selected");
+    btn.addEventListener("click", () => uiSelectPlaylist(id));
+    listEl.appendChild(btn);
+  }
+}
+
+async function uiSelectPlaylist(id) {
+  try {
+    const r = await fetch("/api/playlist-track-set", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playlistId: id }),
+    });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+
+    // Mise à jour “optimiste” : on reflète la sélection immédiatement
+    window.currentPlaylistId = id;
+    window.currentPlaylistIdLastForced = Date.now();
+    await uiUpdatePlaylistLabel();
+
+    // quand changement de playlist, le suffle et le repeat reviennent à off
+    const btnRepeat = document.getElementById("btnRepeat");
+    btnRepeat.classList.add("off");
+    const btnShuffle = document.getElementById("btnShuffle");
+    btnShuffle.classList.add("off");
+
+    // Fermer overlay
+    uiTogglePlaylists();
+  } catch (e) {
+    // Option: afficher une mini erreur
+    alert("Impossible de sélectionner la playlist");
+  }
+}
+
+(function () {
+  const overlay = document.getElementById("plOverlay");
+  if (!overlay) return;
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) uiTogglePlaylists();
+  });
+})();
+
+window.currentPlaylistIdLastForced = null;
 
 refresh();
 setInterval(refresh, 1500);

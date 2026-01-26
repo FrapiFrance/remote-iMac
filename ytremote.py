@@ -65,7 +65,7 @@ def run_playerctl(args: list[str]):
 
 def run_ytmdesktop_api_call(args: list[str | None]) -> tuple[int, dict | None]:
     ok, data = ytmdesktop_api_call(*args)
-    print(f"{datetime.now()} YTMD call {args} returned ok={ok}")
+    # print(f"{datetime.now()} YTMD call {args} returned ok={ok}")
     return (0 if ok else 1), data
 
 
@@ -155,9 +155,6 @@ def get_ytmd_status(resetCache: bool = False) -> dict | None:
         rc, ytmd_data = run_ytmdesktop_api_call(["info", "state"])
         get_ytmd_status._cache = ytmd_data or {}
         get_ytmd_status._cache_time = time.time()
-        print(
-            f"{datetime.now()} YTMD data refreshed repeat mode: {ytmd_data.get('player', {}).get('queue', {}).get('repeatMode', 0)}"
-        )
     else:
         ytmd_data = get_ytmd_status._cache
 
@@ -326,6 +323,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/photos-playsignal": ("xdotool_firefox", ["Down"]),
             "/api/shuffle": ("ytmdesktop", ["command", "shuffle"]),
             "/api/repeat": ("forced_infra", []),
+            "/api/playlist-track-set": ("forced_infra", []),
         }
         if p not in mapping:
             self._send(404, b"Not found\n")
@@ -414,6 +412,36 @@ class Handler(BaseHTTPRequestHandler):
                 None,
                 None,
                 new_mode,
+            ]
+
+            rc, out = run_ytmdesktop_api_call(args)
+            if rc == 0:
+                self._send(200, b"OK\n")
+            else:
+                msg = (f"{kind} error: " + (out or "unknown") + "\n").encode(
+                    "utf-8", "ignore"
+                )
+                self._send(500, msg)
+            get_status(resetCache=True)
+            return
+        if p == "/api/playlist-track-set":
+            # Read JSON: {"playlistId": "...", "trackId": "..."}
+            length = int(self.headers.get("Content-Length", "0") or "0")
+            raw = self.rfile.read(length) if length > 0 else b"{}"
+            try:
+                data = json.loads(raw.decode("utf-8", "ignore"))
+                playlistId = str(data.get("playlistId", None))
+                trackId = str(data.get("trackId", None))
+            except Exception:
+                self._send(400, b"Bad JSON\n")
+                return
+
+            kind, args = mapping[p]
+            args = [  # type: ignore
+                "command",
+                "changeVideo",
+                playlistId,
+                trackId,
             ]
 
             rc, out = run_ytmdesktop_api_call(args)

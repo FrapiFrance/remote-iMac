@@ -55,7 +55,12 @@
       <!-- =============== MUSIC TAB =============== -->
       <section class="tab-panel active" id="tab-music" role="tabpanel" aria-labelledby="tabbtn-music">
         <div class="now">
-          <div class="playlist" id="playlist"></div>
+          <button class="playlist-btn" id="playlistBtn" type="button" onclick="uiTogglePlaylists()">
+            <i class="fa-solid fa-layer-group"></i>
+            <span id="playlist">—</span>
+            <i class="fa-solid fa-chevron-down"></i>
+          </button>
+
           <div class="title">
             <span id="track">Aucune piste</span>
           </div>
@@ -101,7 +106,6 @@
 
           <button class="btn-icon btn-sm btn-secondary off" onclick="send('/api/shuffle'); this.classList.remove('off')" aria-label="Aléatoire" type="button" id="btnShuffle">
             <i class="fa-solid fa-shuffle"></i>
-            <!-- quand chgt PlayList, penser à remettre off -->
           </button>
 
           <button class="btn-icon btn-sm btn-secondary off" onclick="toggleRepeat()" aria-label="Aléatoire" type="button" id="btnRepeat">
@@ -140,6 +144,25 @@
             </div>
           </div>
         </div>
+        <div class="overlay" id="plOverlay" aria-hidden="true">
+        <div class="overlay-card">
+          <div class="overlay-head">
+            <div class="overlay-title">
+              <i class="fa-solid fa-layer-group"></i> <span>Playlists</span>
+            </div>
+            <button class="btn-close" type="button" onclick="uiTogglePlaylists()" aria-label="Fermer">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+
+          <div class="plist" id="plist"></div>
+
+          <div class="overlay-hint">
+            Sélectionne une playlist • la playlist active est surlignée
+          </div>
+        </div>
+      </div>
+
       </section>
 
       <!-- =============== PHOTOS TAB =============== -->
