@@ -183,6 +183,44 @@ function uiToggleVolume() {
   el.setAttribute("aria-hidden", String(!show));
 }
 
+(function () {
+  const btn = document.getElementById("btnVolume");
+  if (!btn) return;
+
+  let longPressTimer = null;
+  let longPressed = false;
+  const LONG_PRESS_MS = 500;
+
+  // TOUCH (mobile)
+  btn.addEventListener("touchstart", (e) => {
+    longPressed = false;
+    longPressTimer = setTimeout(() => {
+      longPressed = true;
+      queueVolume(0);           // MUTE
+    }, LONG_PRESS_MS);
+  }, { passive: true });
+
+  btn.addEventListener("touchend", () => {
+    clearTimeout(longPressTimer);
+  });
+
+  btn.addEventListener("touchcancel", () => {
+    clearTimeout(longPressTimer);
+  });
+
+  // CLICK (desktop + tap court mobile)
+  btn.addEventListener("click", (e) => {
+    if (longPressed) {
+      // on empêche le click après un long press
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    uiToggleVolume();           // TAP NORMAL
+  });
+})();
+
+
 function uiOpenQueue() {
   // Placeholder: you said “later for implementation”.
   // For now, you can hook a bottom-sheet here.
