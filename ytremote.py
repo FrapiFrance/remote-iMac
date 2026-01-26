@@ -14,7 +14,7 @@ from ytm_api_client import ytmdesktop_api_call  # type: ignore
 HOST = "0.0.0.0"
 PORT = 8000
 
-YTMD_CACHE_DELAY = 30  # secondes
+YTMD_CACHE_DELAY = 30  # secondes (* 60 pour liste des playlists, donc 30 minutes)
 
 # Si tu veux cibler un player précis, décommente et ajuste :
 # PLAYER = "youtube-music-desktop-app"
@@ -146,7 +146,7 @@ def set_playback_position(seconds: float):
 
 
 def get_ytmd_status(resetCache: bool = False) -> dict | None:
-    # Call YTMD API for playlist, queue and repeat state (cached for 30 seconds)
+    # Call YTMD API for playlist_id, queue and repeat state (cached for 30 seconds)
     if (
         not hasattr(get_ytmd_status, "_cache")
         or time.time() - get_ytmd_status._cache_time > YTMD_CACHE_DELAY
@@ -200,6 +200,27 @@ def get_ytmd_status(resetCache: bool = False) -> dict | None:
         "queue_pos": queue_pos,
         # "thumbnail_url": thumbnail_url,
     }  # type: ignore
+
+
+def get_ytmd_playlist(resetCache: bool = False) -> dict | None:
+    # Call YTMD API for playlist (cached for 30 minutes)
+    if (
+        not hasattr(get_ytmd_playlist, "_cache")
+        or time.time() - get_ytmd_playlist._cache_time > YTMD_CACHE_DELAY * 60
+        or resetCache
+    ):
+        rc, ytmd_data = run_ytmdesktop_api_call(["info", "playlists"])
+        get_ytmd_playlist._cache = ytmd_data or {}
+        get_ytmd_playlist._cache_time = time.time()
+        print(f"{datetime.now()} YTMD data refreshed playlists count: {len(ytmd_data)}")
+    else:
+        ytmd_data = get_ytmd_playlist._cache
+
+    playlists = {}
+    for p in ytmd_data:
+        playlists[p.get("id", "")] = p.get("title", "")
+
+    return playlists  # type: ignore
 
 
 def get_status(resetCache: bool = False) -> dict[str, str | int | float | bool]:
@@ -265,6 +286,12 @@ class Handler(BaseHTTPRequestHandler):
         if p == "/icon.svg":
             self._send(200, ICON_SVG.encode("utf-8"), "image/svg+xml; charset=utf-8")
             return
+        if p == "/css/ytremote.css":
+            self._send(200, CSS.encode("utf-8"), "text/css; charset=utf-8")
+            return
+        if p == "/js/ytremote.js":
+            self._send(200, JS.encode("utf-8"), "application/javascript; charset=utf-8")
+            return
         if p == "/api/status":
             self._send(
                 200,
@@ -272,11 +299,13 @@ class Handler(BaseHTTPRequestHandler):
                 "application/json; charset=utf-8",
             )
             return
-        if p == "/css/ytremote.css":
-            self._send(200, CSS.encode("utf-8"), "text/css; charset=utf-8")
-            return
-        if p == "/js/ytremote.js":
-            self._send(200, JS.encode("utf-8"), "application/javascript; charset=utf-8")
+        if p == "/api/playlists":
+            # gets list of playlists
+            self._send(
+                200,
+                json.dumps(get_ytmd_playlist()).encode("utf-8"),
+                "application/json; charset=utf-8",
+            )
             return
         self._send(404, b"Not found\n")
 
@@ -297,7 +326,6 @@ class Handler(BaseHTTPRequestHandler):
             "/api/photos-playsignal": ("xdotool_firefox", ["Down"]),
             "/api/shuffle": ("ytmdesktop", ["command", "shuffle"]),
             "/api/repeat": ("forced_infra", []),
-            "/api/playlists": ("ytmdesktop", ["info", "playlists"]),
         }
         if p not in mapping:
             self._send(404, b"Not found\n")
