@@ -179,7 +179,7 @@ def get_ytmd_status(resetCache: bool = False) -> dict | None:
         if isinstance(ytmd_data, dict)
         else []
     )
-    // simplify queue items
+    # simplify queue items
     simple_queue = []
     for item in queue:
         simple_queue.append(
