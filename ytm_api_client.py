@@ -33,7 +33,7 @@ def ytmdesktop_api_call(  # type: ignore
         url = f"{baseUrl}{action}"
         status = requests.get(url, headers={"Authorization": token})
         state = json.loads(status.content)
-        with open(script_dir / "run" / "status.json", "w") as f:
+        with open(script_dir / "run" / f"{action}.json", "w") as f:
             json.dump(state, f, indent=2, ensure_ascii=False)
         return status.status_code == 200, state
     elif mode == "command":

@@ -1,2 +1,3 @@
 run/config.json
-run/status.json
+run/state.json
+run/playlists.json
