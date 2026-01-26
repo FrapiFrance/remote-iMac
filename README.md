@@ -19,5 +19,7 @@ L'ordi concerné est sous kubuntu 24.04 (X11 nécessaire)
 - d'abord corriger le problème des photos mal orientées...
 - passer remote en service user
 
-- gestion du shuffle pas conforme à la spec...
+- gestion du shuffle pas conforme à la spec... faut trouver où ds state il me renvoie l'info de shuffled ou pas.
+    en shuff, on a tjrs selectedItemIndex à 0; ms ds la 1e chanson de normal, aussi
+    en regardant ds le code de https://github.com/ytmdesktop/ytmdesktop , je trouve pas de shuffle en state, juste en action (donc qui comm ande le bouton de l'interface ?) 
 - thumbnail éventuellement, mais bon bof

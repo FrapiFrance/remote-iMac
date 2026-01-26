@@ -31,13 +31,18 @@ async function refresh(){
     }
 
     // état volume
-    const btnVolume = document.getElementById("btnVolume");
-    document.getElementById('vol').value = s.volume;
-    document.getElementById('volLabel').textContent = `${s.volume}%${s.muted ? " (muet)" : ""}`;
-    if (s.muted || s.volume === 0) {
-      btnVolume.innerHTML = '<i class="fa-solid fa-volume-xmark"></i>';
-    } else {
-      btnVolume.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
+    if (typeof s.volume === "number") {
+      const vol = Math.max(0, Math.min(100, Math.round(s.volume)));
+      const volEl = document.getElementById("vol");
+      if (volEl && document.activeElement !== volEl) volEl.value = String(vol);
+      const lbl = document.getElementById("volLabel");
+      if (lbl) lbl.textContent = vol + "%";
+    }
+
+    const muted = !!s.muted || (typeof s.volume === "number" && s.volume === 0);
+    const icon = document.getElementById("volIcon");
+    if (icon) {
+      icon.className = muted ? "fa-solid fa-volume-xmark" : "fa-solid fa-volume-high";
     }
 
     //etat repeat
@@ -164,79 +169,6 @@ async function setSeek(v){
     // optionnel: alert(e)
   }
 }
-
-document
-  .querySelector("#volOverlay .overlay-card")
-  .addEventListener("click", function (e) {
-    e.stopPropagation();
-  });
-
-function uiShowTab(which) {
-  const musicBtn = document.getElementById("tabbtn-music");
-  const photosBtn = document.getElementById("tabbtn-photos");
-  const music = document.getElementById("tab-music");
-  const photos = document.getElementById("tab-photos");
-
-  const isMusic = which === "music";
-  musicBtn.classList.toggle("active", isMusic);
-  photosBtn.classList.toggle("active", !isMusic);
-  musicBtn.setAttribute("aria-selected", String(isMusic));
-  photosBtn.setAttribute("aria-selected", String(!isMusic));
-  music.classList.toggle("active", isMusic);
-  photos.classList.toggle("active", !isMusic);
-
-  // close overlays when switching
-  const volOverlay = document.getElementById("volOverlay");
-  if (volOverlay) {
-    volOverlay.classList.remove("show");
-    volOverlay.setAttribute("aria-hidden", "true");
-  }
-}
-
-function uiToggleVolume() {
-  const el = document.getElementById("volOverlay");
-  if (!el) return;
-  const show = !el.classList.contains("show");
-  el.classList.toggle("show", show);
-  el.setAttribute("aria-hidden", String(!show));
-}
-
-(function () {
-  const btn = document.getElementById("btnVolume");
-  if (!btn) return;
-
-  let longPressTimer = null;
-  let longPressed = false;
-  const LONG_PRESS_MS = 500;
-
-  // TOUCH (mobile)
-  btn.addEventListener("touchstart", (e) => {
-    longPressed = false;
-    longPressTimer = setTimeout(() => {
-      longPressed = true;
-      queueVolume(0);           // MUTE
-    }, LONG_PRESS_MS);
-  }, { passive: true });
-
-  btn.addEventListener("touchend", () => {
-    clearTimeout(longPressTimer);
-  });
-
-  btn.addEventListener("touchcancel", () => {
-    clearTimeout(longPressTimer);
-  });
-
-  // CLICK (desktop + tap court mobile)
-  btn.addEventListener("click", (e) => {
-    if (longPressed) {
-      // on empêche le click après un long press
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
-    uiToggleVolume();           // TAP NORMAL
-  });
-})();
 
 
 function uiToggleQueue() {

@@ -374,7 +374,6 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(500, (out + "\n").encode("utf-8", "ignore"))
             return
         if p == "/api/mute-toggle":
-            # unused (mute by volume 0), but kept for compatibility
             rc, out = run_cmd(
                 ["bash", "-lc", "pactl set-sink-mute @DEFAULT_SINK@ toggle"]
             )

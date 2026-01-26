@@ -71,10 +71,6 @@
             <i class="fa-solid fa-forward-step"></i>
           </button>
 
-          <button class="btn-icon btn-sm" aria-label="Volume" type="button" id="btnVolume">
-            <i class="fa-solid fa-volume-high"></i>
-          </button>
-
           <button class="btn-icon btn-sm btn-secondary off" onclick="send('/api/shuffle'); this.classList.remove('off')" aria-label="Aléatoire" type="button" id="btnShuffle">
             <i class="fa-solid fa-shuffle"></i>
           </button>
@@ -88,33 +84,26 @@
           </button>
         </div>
 
-        <!-- Volume overlay (hidden by default; JS later) -->
-        <div class="overlay" id="volOverlay" aria-hidden="true">
-          <div class="overlay-card">
-            <div class="overlay-head">
-              <div class="overlay-title">
-                <i class="fa-solid fa-volume-high"></i> <span id="volLabel">—%</span>
-              </div>
-              <button class="btn-close" type="button" onclick="uiToggleVolume()" aria-label="Fermer">
-                <i class="fa-solid fa-xmark"></i>
-              </button>
-            </div>
-
-            <input
-              id="vol"
-              type="range"
-              min="0"
-              max="100"
-              value="50"
-              class="slider"
-              oninput="queueVolume(this.value)"
-            />
-
-            <div class="overlay-hint">
-              Tap : afficher/masquer • 0 : mute
-            </div>
+        <div class="now now-compact">
+          <div class="title title-compact">
+            <span class="pill pill-btn" id="muteBtn" onclick="send('/api/mute-toggle')">
+              <i id="volIcon" class="fa-solid fa-volume-high"></i>
+            </span>
+            <span id="volLabel">—%</span>
           </div>
+
+          <input
+            id="vol"
+            type="range"
+            min="0"
+            max="100"
+            value="50"
+            class="slider"
+            oninput="queueVolume(this.value)"
+          />
         </div>
+
+
         <!-- Playlists overlay (hidden by default; JS later) -->
         <div class="overlay" id="plOverlay" aria-hidden="true">
         <div class="overlay-card">
@@ -159,7 +148,7 @@
       <!-- =============== PHOTOS  =============== -->
         <div class="photos">
           <div class="photos-header">
-            <div class="photos-title">Photos</div>
+            <div class="title">Photos</div>
 
             <button class="btn-alert" onclick="send('/api/photos-playsignal')" title="Signal" type="button" aria-label="Signal">
               <i class="fa-solid fa-triangle-exclamation"></i>
