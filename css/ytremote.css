@@ -110,7 +110,7 @@ body{
 .controls-row{
   width:min(980px, 96vw);
   display:grid;
-  grid-template-columns: 1fr 1.25fr 1fr .95fr .95fr .95fr .95fr;
+  grid-template-columns: 1fr 1.25fr 1fr .95fr .95fr .95fr;
   gap: 12px;
   align-items:center;
 }
@@ -163,20 +163,23 @@ button{
   position: relative;
 }
 
-/* barre oblique rouge marquant le bouton désactivé (un peu moche...) */
+/* barre oblique rouge marquant le bouton désactivé (un peu moche...) 
 .btn-icon.off::after{
   content:"";
   position:absolute;
   width:30%;
   height:5px;
-  background:#c62828; /* rouge */
+  background:#c62828;
   top:45%;
   left:35%;
   transform: rotate(-30deg);
   border-radius:2px;
   pointer-events:none;
 }
-
+*/
+.btn-icon.off{ /* Version simple sans barre oblique, juste en grisé */
+  color:#808080;
+}
 
 /* Photos block */
 .photos{
