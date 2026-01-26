@@ -1,3 +1,4 @@
+const YTMD_CACHE_DELAY = 5000; // ms idem to ytremote.py
 
 async function send(path) {
   try {
@@ -72,10 +73,10 @@ async function refresh(){
     // état playlist
     if (typeof window.currentPlaylistIdLastForced === "number") {
       // si on a forcé une playlist récemment, on ne met pas à jour
-      //  (car /api/status renvoie une version cachée 30 secondes)
+      //  (car /api/status renvoie une version cachée 5 secondes)
       // console.log("have last forced timestamp:", window.currentPlaylistIdLastForced);
       const elapsed = Date.now() - window.currentPlaylistIdLastForced;
-      if (elapsed < 31000) {
+      if (elapsed < 5000) {
         // console.log("skip playlist id update, forced recently");
       } else {
         // console.log("clear last forced timestamp");
@@ -286,7 +287,7 @@ async function uiSelectQueueItem(videoId) {
     const r = await fetch("/api/playlist-track-set", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({  trackId: videoId }),
+      body: JSON.stringify({  trackId: videoId, playlistId: window.currentPlaylistId  }),
     });
     if (!r.ok) throw new Error("HTTP " + r.status);
 

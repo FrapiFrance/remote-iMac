@@ -26,17 +26,19 @@ def ytmdesktop_api_call(  # type: ignore
     videoId: str | None = None,  # for changeVideo
     data: str | None = None,  # for repeat, or some other commands
 ) -> tuple[bool, dict | None]:  # type: ignore
-    if (mode, action) != ("info", "state"):
-        print(
-            f"{datetime.now()} YTMD API call: mode={mode}, action={action}, playlistId={playlistId}, videoId={videoId} data={data}"
-        )
+    # if (mode, action) != ("info", "state"):
+    #     print(
+    #         f"{datetime.now()} YTMD API call: mode={mode}, action={action}, playlistId={playlistId}, videoId={videoId} data={data}"
+    #     )
     if mode == "info":
         url = f"{baseUrl}{action}"
         status = requests.get(url, headers={"Authorization": token})
         state = json.loads(status.content)
-        for header, value in status.headers.items():
-            if header.lower().startswith("x-ratelimit-"):
-                print(f"{action} {header}: {value}")
+        # x-rate limit : we may handle that better ;-) 
+        # I just have a YTMD_CACHE_DELAY consistent with the rate for state (5 sec), and for list of playlists, 5 minutes is way more than their 30 secondes rate
+        #for header, value in status.headers.items():
+        #    if header.lower().startswith("x-ratelimit-"):
+        #        print(f"{action} {header}: {value}")
         with open(script_dir / "run" / f"{action}.json", "w") as f:
             json.dump(state, f, indent=2, ensure_ascii=False)
         return status.status_code == 200, state
@@ -54,7 +56,6 @@ def ytmdesktop_api_call(  # type: ignore
                 json_data["data"]["videoId"] = videoId
         elif data is not None and data != "None":
             json_data["data"] = data
-        print(f"YTMD API command data: {json_data}")
         status = requests.post(
             url,
             headers={"Authorization": token},
