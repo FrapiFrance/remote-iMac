@@ -14,7 +14,7 @@ from ytm_api_client import ytmdesktop_api_call  # type: ignore
 HOST = "0.0.0.0"
 PORT = 8000
 
-YTMD_CACHE_DELAY = 5  # secondes (* 60 pour liste des playlists, donc  minutes)
+YTMD_CACHE_DELAY = 5  # secondes (* 60 *12 pour liste des playlists, donc  1 h)
 
 # Si tu veux cibler un player précis, décommente et ajuste :
 # PLAYER = "youtube-music-desktop-app"
@@ -207,7 +207,7 @@ def get_ytmd_playlist(resetCache: bool = False) -> dict | None:
     # Call YTMD API for playlist (cached for 30 minutes)
     if (
         not hasattr(get_ytmd_playlist, "_cache")
-        or time.time() - get_ytmd_playlist._cache_time > YTMD_CACHE_DELAY * 60
+        or time.time() - get_ytmd_playlist._cache_time > YTMD_CACHE_DELAY * 60 * 12
         or resetCache
     ):
         rc, ytmd_data = run_ytmdesktop_api_call(["info", "playlists"])
