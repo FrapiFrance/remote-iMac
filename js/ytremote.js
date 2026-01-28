@@ -19,6 +19,16 @@ async function refresh(){
     document.getElementById('track').textContent = s.title || "Aucune piste";
     document.getElementById('artist').textContent = s.artist || "—";
 
+    // shall we show the photos section?
+    const photosSection = document.getElementById("photosSection");
+    if (photosSection) {
+      if (!s.hide_photos) {
+        photosSection.style.display = "block";
+      } else {
+        photosSection.style.display = "none";
+      }
+    }
+
     // état play/pause
     const st = s.status || "Unknown";
     const btnPlay = document.querySelector(".btn-primary");

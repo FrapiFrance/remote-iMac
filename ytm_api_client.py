@@ -1,22 +1,17 @@
 #!/usr/bin/env python3
 # very basic YTMDesktop Companion Server API client
-from datetime import datetime
 import requests
 import json
-import os
 from pathlib import Path
+from config import config  # type: ignore
 
-BASE_URL = "http://localhost:9863/api/v1/"  # standard URL for YTMD API
+baseUrl = config.get(  # type: ignore
+    "baseUrl",
+    "http://localhost:9863/api/v1/",  # standard URL for YTMD API
+)
+token = config["token"]  # type: ignore
 
 script_dir = Path(__file__).parent
-config_path = script_dir / "run" / "config.json"
-
-with open(config_path, "r") as f:
-    config = json.load(f)
-    token = config["token"]
-    # see https://ytmdesktop.github.io/developer/companion-server/reference/v1/auth-requestcode.html
-    # to get the token
-    baseUrl = config.get("baseUrl", BASE_URL)
 
 
 def ytmdesktop_api_call(  # type: ignore
@@ -30,13 +25,14 @@ def ytmdesktop_api_call(  # type: ignore
     #     print(
     #         f"{datetime.now()} YTMD API call: mode={mode}, action={action}, playlistId={playlistId}, videoId={videoId} data={data}"
     #     )
+    global script_dir
     if mode == "info":
         url = f"{baseUrl}{action}"
         status = requests.get(url, headers={"Authorization": token})
         state = json.loads(status.content)
-        # x-rate limit : we may handle that better ;-) 
+        # x-rate limit : we may handle that better ;-)
         # I just have a YTMD_CACHE_DELAY consistent with the rate for state (5 sec), and for list of playlists, 5 minutes is way more than their 30 secondes rate
-        #for header, value in status.headers.items():
+        # for header, value in status.headers.items():
         #    if header.lower().startswith("x-ratelimit-"):
         #        print(f"{action} {header}: {value}")
         with open(script_dir / "run" / f"{action}.json", "w") as f:

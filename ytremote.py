@@ -9,17 +9,22 @@ from urllib.parse import urlparse
 import re
 import os
 import time
+from config import config
 from ytm_api_client import ytmdesktop_api_call  # type: ignore
 
-HOST = "0.0.0.0"
-PORT = 8000
+if config.get("playerctl_player", None):
+    PLAYER = config["playerctl_player"]
+    BASE_CMD = ["playerctl", "-p", PLAYER]
+else:
+    BASE_CMD = ["playerctl"]
 
-YTMD_CACHE_DELAY = 5  # secondes (* 60 *12 pour liste des playlists, donc  1 h)
+HOST = config.get("host", "0.0.0.0")
+PORT = config.get("port", 8000)
 
-# Si tu veux cibler un player précis, décommente et ajuste :
-# PLAYER = "youtube-music-desktop-app"
-# BASE_CMD = ["playerctl", "-p", PLAYER]
-BASE_CMD = ["playerctl"]
+YTMD_CACHE_DELAY = config.get("youtubemusicdesktop_state_cache_delay", 5)  # seconds
+YTMD_PLAYLISTS_CACHE_DELAY = config.get(
+    "youtubemusicdesktop_playlists_cache_delay", 3600
+)  # 1 hour
 
 
 MANIFEST: dict[str, str | list[dict[str, str]]] = {
@@ -207,7 +212,7 @@ def get_ytmd_playlist(resetCache: bool = False) -> dict | None:
     # Call YTMD API for playlist (cached for 30 minutes)
     if (
         not hasattr(get_ytmd_playlist, "_cache")
-        or time.time() - get_ytmd_playlist._cache_time > YTMD_CACHE_DELAY * 60 * 12
+        or time.time() - get_ytmd_playlist._cache_time > YTMD_PLAYLISTS_CACHE_DELAY
         or resetCache
     ):
         rc, ytmd_data = run_ytmdesktop_api_call(["info", "playlists"])
@@ -228,6 +233,7 @@ def get_ytmd_playlist(resetCache: bool = False) -> dict | None:
 
 
 def get_status(resetCache: bool = False) -> dict[str, str | int | float | bool]:
+    global config
     rc1, out1 = run_playerctl(["status"])
     status = out1.strip() if rc1 == 0 else "Unknown"
 
@@ -240,7 +246,8 @@ def get_status(resetCache: bool = False) -> dict[str, str | int | float | bool]:
     vol, muted = get_system_volume()
     pos, length = get_playback_position_and_length()
 
-    ytmd_data = get_ytmd_status(resetCache=resetCache)
+    ytmd_data = get_ytmd_status(resetCache=resetCache)  # type: ignore
+    hide_photos = config.get("hidePhotos", False)  # type: ignore
 
     return {
         "status": status,
@@ -255,6 +262,7 @@ def get_status(resetCache: bool = False) -> dict[str, str | int | float | bool]:
         "queue": ytmd_data[
             "queue"
         ],  # list of {"title":..., "author":..., "videoId":..., "selected":false/true} # type: ignore
+        "hide_photos": hide_photos,
     }
 
 
