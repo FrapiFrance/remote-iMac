@@ -10,21 +10,20 @@ import re
 import os
 import time
 from config import config
+from urllib.parse import unquote
 from ytm_api_client import ytmdesktop_api_call  # type: ignore
 
-if config.get("playerctl_player", None):
+if config["playerctl_player"] is not None:
     PLAYER = config["playerctl_player"]
     BASE_CMD = ["playerctl", "-p", PLAYER]
 else:
     BASE_CMD = ["playerctl"]
 
-HOST = config.get("host", "0.0.0.0")
-PORT = config.get("port", 8000)
+HOST = config["host"]
+PORT = config["port"]
 
-YTMD_CACHE_DELAY = config.get("youtubemusicdesktop_state_cache_delay", 5)  # seconds
-YTMD_PLAYLISTS_CACHE_DELAY = config.get(
-    "youtubemusicdesktop_playlists_cache_delay", 3600
-)  # 1 hour
+YTMD_CACHE_DELAY = config["youtubemusicdesktop_state_cache_delay"]  # seconds
+YTMD_PLAYLISTS_CACHE_DELAY = config["youtubemusicdesktop_playlists_cache_delay"]
 
 
 MANIFEST: dict[str, str | list[dict[str, str]]] = {
@@ -247,7 +246,25 @@ def get_status(resetCache: bool = False) -> dict[str, str | int | float | bool]:
     pos, length = get_playback_position_and_length()
 
     ytmd_data = get_ytmd_status(resetCache=resetCache)  # type: ignore
-    hide_photos = config.get("hidePhotos", False)  # type: ignore
+    hide_photos = config["hidePhotos"]  # type: ignore
+
+    photo_image_path = "about:blank"
+    if not hide_photos:
+        try:
+            with open(
+                os.path.expanduser(
+                    config["photoFile"]  # type: ignore
+                ),
+                "r",
+                encoding="utf-8",
+            ) as f:
+                photo_image_path_candidate = f.read().strip()
+                # like "modules/MMM-BackgroundSlideshow/google_photos/2022/IMG_3062.JPG"
+                if "../" in photo_image_path_candidate:
+                    raise ValueError("Invalid path: contains '..'")
+                photo_image_path = photo_image_path_candidate
+        except Exception as e:
+            print(f"{datetime.now()} photo_image_path read error: {e}")
 
     return {
         "status": status,
@@ -263,6 +280,7 @@ def get_status(resetCache: bool = False) -> dict[str, str | int | float | bool]:
             "queue"
         ],  # list of {"title":..., "author":..., "videoId":..., "selected":false/true} # type: ignore
         "hide_photos": hide_photos,
+        "photo_image_path": photo_image_path,
     }
 
 
@@ -279,6 +297,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         p = urlparse(self.path).path
+        p = unquote(p)
         if p in ("/", "/index.html"):
             self._send(200, HTML.encode("utf-8"), "text/html; charset=utf-8")
             return
@@ -318,6 +337,39 @@ class Handler(BaseHTTPRequestHandler):
                 "application/json; charset=utf-8",
             )
             return
+        # Serve photo files
+        if p.startswith(
+            "/" + config["photoMagicMirrorRoot"]  # type: ignore
+        ):
+            p = p.replace(
+                "/" + config["photoMagicMirrorRoot"],  # type: ignore
+                config["photoRoot"],  # type: ignore
+            )
+            path_on_disk = os.path.expanduser(p.lstrip("/"))
+            if os.path.isfile(path_on_disk):
+                try:
+                    if ".." in path_on_disk:
+                        raise ValueError("Invalid path: contains '..'")
+                    with open(path_on_disk, "rb") as f:
+                        data = f.read()
+                    # Simple content type detection
+                    if path_on_disk.lower().endswith(
+                        ".jpg"
+                    ) or path_on_disk.lower().endswith(".jpeg"):
+                        ctype = "image/jpeg"
+                    elif path_on_disk.lower().endswith(".png"):
+                        ctype = "image/png"
+                    elif path_on_disk.lower().endswith(
+                        ".heic"
+                    ) or path_on_disk.lower().endswith(".heif"):
+                        ctype = "image/heic"
+                    else:
+                        ctype = "application/octet-stream"
+                        raise ValueError("Invalid path: not a supported image type")
+                    self._send(200, data, ctype)
+                    return
+                except Exception as e:
+                    print(f"{datetime.now()} photo file read error: {e}")
         self._send(404, b"Not found\n")
 
     def do_POST(self):

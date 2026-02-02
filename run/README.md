@@ -14,5 +14,8 @@ Here are the default values :
     "port" : 8000,  // and port
     "youtubemusicdesktop_state_cache_delay": 5, // 5 secondes
     "youtubemusicdesktop_playlists_cache_delay": 3600, // 1h
+    "photoFile": "~/magicmirror/mounts/config/imagePath.txt", // where MagicMirror MMM-BackgroundSlideshow store Path of image  
+    "photoMagicMirrorRoot" : "modules/MMM-BackgroundSlideshow/google_photos/", // part of path of image as known by MagicMirror
+    "photoRoot" : "~/GooglePhotos/", // real root path where to find photos. !! FIXME Possible security hole ! 
 }
 ```

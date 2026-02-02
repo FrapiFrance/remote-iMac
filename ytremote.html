@@ -23,6 +23,39 @@
 
   <body>
     <div class="page">
+      <!-- Tabs -->
+      <div class="tabs" role="tablist" aria-label="remote-iMac tabs">
+        <button
+          class="tab active"
+          role="tab"
+          aria-selected="true"
+          aria-controls="tab-music"
+          id="tabbtn-music"
+          onclick="uiShowTab('music')"
+          type="button"
+        >
+          <i class="fa-solid fa-music"></i>
+          <span>Musique</span>
+        </button>
+
+        <button
+          class="tab"
+          role="tab"
+          aria-selected="false"
+          aria-controls="tab-photos"
+          id="tabbtn-photos"
+          onclick="uiShowTab('photos')"
+          type="button"
+        >
+          <i class="fa-solid fa-images"></i>
+          <span>Photos</span>
+        </button>
+      </div>
+
+      <!-- =============== MUSIC TAB =============== -->
+      <section class="tab-panel active" id="tab-music" role="tabpanel" aria-labelledby="tabbtn-music">
+
+
 
       <!-- =============== MUSIC  =============== -->
         <div class="now">
@@ -144,8 +177,13 @@
     </div>
 
 
+  </section>
 
-      <!-- =============== PHOTOS  =============== -->
+      <!-- =============== PHOTOS TAB =============== -->
+      <section class="tab-panel" id="tab-photos" role="tabpanel" aria-labelledby="tabbtn-photos">
+        <div class="now">
+            <img src="" id="photo" alt="Google Photo" style="width: 100%;" />
+        </div>
         <div class="photos" id="photosSection" style="display: none;">
           <div class="photos-header">
             <div class="title">Photos</div>
@@ -167,7 +205,7 @@
             </button>
           </div>
         </div>
-
+      </section>
       <div class="hint">
         <a href="mailto:frapi@centrale-lyon.org">Frapi</a> <a href="https://github.com/FrapiFrance/remote-iMac">remote iMac</a><br />
         installable<br />

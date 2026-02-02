@@ -17,6 +17,36 @@ body{
   flex-direction:column;
   gap:18px;
 }
+
+/* Tabs */
+.tabs{
+  width:min(980px, 96vw);
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.tab{
+  border: 2px solid rgba(255,255,255,.18);
+  border-radius: 18px;
+  background: rgba(255,255,255,.10);
+  color:#fff;
+  font-weight: 900;
+  letter-spacing: .2px;
+  padding: 10px 12px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  cursor:pointer;
+}
+.tab.active{
+  background:#66A0D3;
+  color:#000;
+  border-color: rgba(255,255,255,.22);
+}
+.tab-panel{ display:none; }
+.tab-panel.active{ display:block; }
+
 /* Cards */
 .now{
   background:#121212;

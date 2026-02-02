@@ -111,7 +111,24 @@ async function refresh(){
       uiRenderQueue();
     }
 
-  } catch(e) {}
+    // photo URL
+    try {
+      const photoEl = document.getElementById("photo");
+      if (photoEl) {
+        if (s.photo_image_path) {
+          if (photoEl.src !== s.photo_image_path) {
+            photoEl.src = s.photo_image_path;
+          }
+        } else {
+          if (photoEl.src) {
+            photoEl.src = "";
+          }
+        }
+      }
+    } catch(e) {}
+  } catch(e){
+    console.error("refresh error:", e);
+  }
   }
 
 function toggleRepeat(){
@@ -358,6 +375,28 @@ async function uiSelectPlaylist(id) {
   } catch (e) {
     // Option: afficher une mini erreur
     alert("Impossible de sélectionner la playlist",e);
+  }
+}
+
+function uiShowTab(which) {
+  const musicBtn = document.getElementById("tabbtn-music");
+  const photosBtn = document.getElementById("tabbtn-photos");
+  const music = document.getElementById("tab-music");
+  const photos = document.getElementById("tab-photos");
+
+  const isMusic = which === "music";
+  musicBtn.classList.toggle("active", isMusic);
+  photosBtn.classList.toggle("active", !isMusic);
+  musicBtn.setAttribute("aria-selected", String(isMusic));
+  photosBtn.setAttribute("aria-selected", String(!isMusic));
+  music.classList.toggle("active", isMusic);
+  photos.classList.toggle("active", !isMusic);
+
+  // close overlays when switching
+  const volOverlay = document.getElementById("volOverlay");
+  if (volOverlay) {
+    volOverlay.classList.remove("show");
+    volOverlay.setAttribute("aria-hidden", "true");
   }
 }
 
