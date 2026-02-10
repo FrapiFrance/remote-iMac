@@ -25,6 +25,8 @@ PORT = config["port"]
 YTMD_CACHE_DELAY = config["youtubemusicdesktop_state_cache_delay"]  # seconds
 YTMD_PLAYLISTS_CACHE_DELAY = config["youtubemusicdesktop_playlists_cache_delay"]
 
+current_photo_image_path = None
+
 
 MANIFEST: dict[str, str | list[dict[str, str]]] = {
     "name": "remote iMac",
@@ -233,6 +235,7 @@ def get_ytmd_playlist(resetCache: bool = False) -> dict | None:
 
 def get_status(resetCache: bool = False) -> dict[str, str | int | float | bool]:
     global config
+    global current_photo_image_path
     rc1, out1 = run_playerctl(["status"])
     status = out1.strip() if rc1 == 0 else "Unknown"
 
@@ -263,6 +266,7 @@ def get_status(resetCache: bool = False) -> dict[str, str | int | float | bool]:
                 if "../" in photo_image_path_candidate:
                     raise ValueError("Invalid path: contains '..'")
                 photo_image_path = photo_image_path_candidate
+                current_photo_image_path = photo_image_path
         except Exception as e:
             print(f"{datetime.now()} photo_image_path read error: {e}")
 
@@ -341,6 +345,13 @@ class Handler(BaseHTTPRequestHandler):
         if p.startswith(
             "/" + config["photoMagicMirrorRoot"]  # type: ignore
         ):
+            # far more secure : we won't take the path provided by th client, but take our local current_photo_image_path
+            if current_photo_image_path:
+                p = "/" + current_photo_image_path
+            else:
+                self._send(404, b"Not found\n")
+                return
+
             p = p.replace(
                 "/" + config["photoMagicMirrorRoot"],  # type: ignore
                 config["photoRoot"],  # type: ignore

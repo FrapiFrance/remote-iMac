@@ -1,4 +1,5 @@
 const YTMD_CACHE_DELAY = 5000; // ms idem to ytremote.py
+let current_photo_image_path = null;
 
 async function send(path) {
   try {
@@ -115,11 +116,11 @@ async function refresh(){
     try {
       const photoEl = document.getElementById("photo");
       if (photoEl) {
-        if (s.photo_image_path) {
-          if (photoEl.src !== s.photo_image_path) {
-            photoEl.src = s.photo_image_path;
-          }
-        } else {
+        if (s.photo_image_path && s.photo_image_path !== current_photo_image_path) {
+          current_photo_image_path = s.photo_image_path;
+          photoEl.src = s.photo_image_path;
+        }
+        else if (!(s.photo_image_path)) {
           if (photoEl.src) {
             photoEl.src = "";
           }
