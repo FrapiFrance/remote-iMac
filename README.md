@@ -12,7 +12,15 @@ Si vous n'utilisez que YTMDesktop (cas le plus fréquent sans doute :-)) :
 
 ## musique
 
-Pour les playlists et la file de lecture, on utilise l'API YTMDesktop, see [doc](https://ytmdesktop.github.io/developer/companion-server/reference/v1/auth-requestcode.html)  to get the token
+Pour les playlists, la file de lecture, repeat et shuffle, on utilise l'API Companion Server de YTMDesktop (testé avec la 2.1.0), voir la [doc](https://ytmdesktop.github.io/developer/companion-server/).
+
+Pour obtenir le token (écrit dans `run/config.json`) :
+
+1. YTMDesktop > Paramètres > Intégrations : activer « Companion server » et « Enable companion authorization »
+2. lancer `./ytmd_auth.py`, puis valider le code (bouton Allow) dans la fenêtre qui s'ouvre sur l'écran
+3. désactiver « Enable companion authorization » (en 2.1.0, le laisser activé 5 minutes fait planter YTMD)
+
+Si l'API répond `UNAUTHORIZED` et que la fenêtre Paramètres de YTMD reste vide, ses tokens chiffrés sont illisibles ([#1524](https://github.com/ytmdesktop/ytmdesktop/issues/1524)) : YTMD fermé, mettre `integrations.companionServerAuthTokens` à `null` dans `~/.config/YouTube Music Desktop App/config.json`, puis refaire l'appairage.
 
 ## photos
 Il faut avoir MagicMirror avec [MMM-BackgroundSlideshow](https://github.com/darickc/MMM-BackgroundSlideshow)  et [MMM-Keypress](https://github.com/ItsMeBrille/MMM-Keypress)
@@ -38,7 +46,5 @@ et le fichier [run_at_start.sh](run_at_start.sh) donne un bon exemple de comment
 ### TODO
 
 - passer remote en service user ?
-- gestion du shuffle pas conforme à la spec... faut trouver où ds state il me renvoie l'info de shuffled ou pas.
-    en shuff, on a tjrs selectedItemIndex à 0; ms ds la 1e chanson de normal, aussi
-    en regardant ds le code de https://github.com/ytmdesktop/ytmdesktop , je trouve pas de shuffle en state, juste en action (donc qui comm ande le bouton de l'interface ?) 
+- passer à l'API temps réel socket.io de YTMD (plus de rate limit sur /state)
 - thumbnail éventuellement, mais bon bof
