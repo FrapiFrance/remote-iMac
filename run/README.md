@@ -9,6 +9,8 @@ Here are the default values :
     "token": "see https://ytmdesktop.github.io/developer/companion-server/reference/v1/auth-requestcode.html",
     "baseUrl": "http://localhost:9863/api/v1/",
     "hidePhotos": false,   // if you don't use the "photos" part
+    "magicMirrorUrl": "http://localhost:8080",  // MagicMirror, with MMM-Remote-Control
+    "magicMirrorApiKey": "",  // apiKey of MMM-Remote-Control, if any
     "playerctl_player" : null, // could be "youtube-music-desktop-app" or "chromium.instance4242" if you want to target a specific player
     "host" "0.0.0.0",  // on which IP the server runs
     "port" : 8000,  // and port

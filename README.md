@@ -23,9 +23,10 @@ Pour obtenir le token (écrit dans `run/config.json`) :
 Si l'API répond `UNAUTHORIZED` et que la fenêtre Paramètres de YTMD reste vide, ses tokens chiffrés sont illisibles ([#1524](https://github.com/ytmdesktop/ytmdesktop/issues/1524)) : YTMD fermé, mettre `integrations.companionServerAuthTokens` à `null` dans `~/.config/YouTube Music Desktop App/config.json`, puis refaire l'appairage.
 
 ## photos
-Il faut avoir MagicMirror avec [MMM-BackgroundSlideshow](https://github.com/darickc/MMM-BackgroundSlideshow)  et [MMM-Keypress](https://github.com/ItsMeBrille/MMM-Keypress)
+Il faut avoir MagicMirror avec [MMM-BackgroundSlideshow](https://github.com/darickc/MMM-BackgroundSlideshow) et [MMM-Remote-Control](https://github.com/Jopyth/MMM-Remote-Control)
 
-Ça affiche en diaporama les photos d'un répertoire de votre disque. Par exemple, que vous auriez récupéré d'un TakeOut GooglePhotos... Avec Keypress, l'affichage est commandé par les flèches, et la télécommande simule les flèches avec xdotool.
+Ça affiche en diaporama les photos d'un répertoire de votre disque. Par exemple, que vous auriez récupéré d'un TakeOut GooglePhotos... La télécommande pilote le diaporama en envoyant les notifications `BACKGROUNDSLIDESHOW_PREVIOUS`, `_NEXT`, `_PAUSE` et `_SIGNAL_PHOTO` via l'API de MMM-Remote-Control (`magicMirrorUrl` et `magicMirrorApiKey` dans `run/config.json`).
+Avec [MMM-Keypress](https://github.com/ItsMeBrille/MMM-Keypress) en plus, on peut aussi utiliser les flèches d'un clavier.
 Je l'utilise en mode server only docker, avec un firefox en client (et ça marche  même avec plusieurs clients en même temps, local et distants !)
 
 ## écran
@@ -37,11 +38,11 @@ Si motion tourne en service utilisateur systemd, le démarrer avec la session gr
 
 ## prérequis
 
-L'ordi concerné est sous kubuntu 24.04 (**X11** nécessaire, pas Wayland)
+L'ordi concerné est sous kubuntu 24.04, en X11. La télécommande elle-même fonctionne aussi sous Wayland.
 
 Il y a un certain nombre de packages nécessaires :
 
-- xdotool,
+- xdotool (seulement pour wake-screen.sh sous X11),
 - playerctl,
 - pactl
 - python3-requests

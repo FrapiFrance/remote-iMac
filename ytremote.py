@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 import re
 import os
 import time
+import requests
 from config import config
 from urllib.parse import unquote
 from ytm_api_client import ytmdesktop_api_call  # type: ignore
@@ -58,9 +59,8 @@ with open(os.path.join(SCRIPT_DIR, "js", "ytremote.js"), "r", encoding="utf-8") 
     JS = f.read()
 
 
-# - LC_ALL=C : sorties en anglais, pour pouvoir les parser (pactl en français répond "Mute: oui")
-# - DISPLAY : xdotool agit sur l'écran de l'iMac
-CMD_ENV = {**os.environ, "LC_ALL": "C", "DISPLAY": os.environ.get("DISPLAY", ":0")}
+# LC_ALL=C : sorties en anglais, pour pouvoir les parser (pactl en français répond "Mute: oui")
+CMD_ENV = {**os.environ, "LC_ALL": "C"}
 
 
 def run_cmd(cmd: list[str]) -> tuple[int, str]:
@@ -81,16 +81,17 @@ def run_ytmdesktop_api_call(args: list[str | None]) -> tuple[int, dict | None]:
     return (0 if ok else 1), data
 
 
-def run_xdotool_key_to_firefox(keysym: str) -> tuple[int, str]:
-    # envoie la touche à la première fenêtre Firefox visible (pas besoin de l'activer)
+def send_slideshow_notification(action: str) -> tuple[int, str]:
+    # envoie BACKGROUNDSLIDESHOW_<action> à MagicMirror via MMM-Remote-Control
+    url = f"{config['magicMirrorUrl'].rstrip('/')}/api/notification/BACKGROUNDSLIDESHOW_{action}"
+    headers = {}
+    if config["magicMirrorApiKey"]:
+        headers["Authorization"] = f"apiKey {config['magicMirrorApiKey']}"
     try:
-        rc, out = run_cmd(["xdotool", "search", "--onlyvisible", "--class", "firefox"])
-        wid = out.split()[0] if rc == 0 and out else ""
-        if not wid:
-            return 2, "no visible Firefox window"
-        return run_cmd(["xdotool", "key", "--window", wid, keysym])
+        r = requests.post(url, headers=headers, timeout=3)
     except Exception as e:
-        return 1, str(e)
+        return 1, f"{type(e).__name__}: {e}"
+    return (0, "") if r.ok else (1, f"HTTP {r.status_code} {r.text}")
 
 
 def run_pactl(args: list[str]) -> tuple[int, str]:
@@ -398,10 +399,11 @@ class Handler(BaseHTTPRequestHandler):
             "/api/vol-set": ("forced_infra", []),
             "/api/mute-toggle": ("forced_infra", []),
             "/api/seek-set": ("forced_infra", []),
-            "/api/photos-prev": ("xdotool_firefox", ["Left"]),
-            "/api/photos-next": ("xdotool_firefox", ["Right"]),
-            "/api/photos-pause": ("xdotool_firefox", ["Up"]),
-            "/api/photos-playsignal": ("xdotool_firefox", ["Down"]),
+            # pause totale : c'est "suivante" qui relance le diaporama
+            "/api/photos-prev": ("slideshow", ["PREVIOUS"]),
+            "/api/photos-next": ("slideshow", ["NEXT"]),
+            "/api/photos-pause": ("slideshow", ["PAUSE"]),
+            "/api/photos-playsignal": ("slideshow", ["SIGNAL_PHOTO"]),
             "/api/shuffle": ("forced_infra", []),
             "/api/repeat": ("forced_infra", []),
             "/api/playlist-track-set": ("forced_infra", []),
@@ -514,8 +516,8 @@ class Handler(BaseHTTPRequestHandler):
         elif kind == "ytmdesktop":
             rc, out = run_ytmdesktop_api_call(args)  # type: ignore
             out = str(out) if out is not None else ""  # type: ignore
-        else:  # xdotool_firefox
-            rc, out = run_xdotool_key_to_firefox(args[0])
+        else:  # slideshow
+            rc, out = send_slideshow_notification(args[0])
 
         if rc == 0:
             self._send(200, b"OK\n")

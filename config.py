@@ -13,6 +13,9 @@ def load_config() -> dict:  # type: ignore
     config["token"] = config.get("token", "")
     config["baseUrl"] = config.get("baseUrl", "http://localhost:9863/api/v1/")
     config["hidePhotos"] = config.get("hidePhotos", False)
+    # MagicMirror + MMM-Remote-Control, pour piloter le diaporama
+    config["magicMirrorUrl"] = config.get("magicMirrorUrl", "http://localhost:8080")
+    config["magicMirrorApiKey"] = config.get("magicMirrorApiKey", "")
     config["playerctl_player"] = config.get("playerctl_player", None)
     config["youtubemusicdesktop_state_cache_delay"] = config.get(
         "youtubemusicdesktop_state_cache_delay", 5
