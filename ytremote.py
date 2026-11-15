@@ -151,89 +151,89 @@ def set_playback_position(seconds: float):
     return run_playerctl(["position", f"{s}"])
 
 
-def get_ytmd_status(resetCache: bool = False) -> dict | None:
-    # Call YTMD API for playlist_id, queue and repeat state (cached for 30 seconds)
-    if (
-        not hasattr(get_ytmd_status, "_cache")
-        or time.time() - get_ytmd_status._cache_time > YTMD_CACHE_DELAY
-        or resetCache
-    ):
-        rc, ytmd_data = run_ytmdesktop_api_call(["info", "state"])
-        get_ytmd_status._cache = ytmd_data or {}
-        get_ytmd_status._cache_time = time.time()
-    else:
-        ytmd_data = get_ytmd_status._cache
+# YTMD limite /state à 1 requête / 5 s et /playlists à 1 requête / 30 s (par token) :
+# au-delà on reçoit un 429. On garde donc toujours le dernier état valide en cache.
+YTMD_STATE_MIN_INTERVAL = 5.0
+YTMD_PLAYLISTS_RETRY_DELAY = 30.0
 
-    rm = (
-        ytmd_data.get("player", {}).get("queue", {}).get("repeatMode", 0)
-        if isinstance(ytmd_data, dict)
-        else 0
-    )
-    if rm == 0:
-        repeat_state = "no"
-    elif rm == 1:
-        repeat_state = "all"
-    elif rm == 2:
-        repeat_state = "one"
-    else:
-        repeat_state = "no"
+_ytmd_state: dict[str, Any] = {"data": None, "fetched_at": 0.0, "stale": False}
+_ytmd_playlists: dict[str, Any] = {"data": None, "fetched_at": 0.0}
 
-    playlist_id = ytmd_data.get("playlistId", "") if isinstance(ytmd_data, dict) else ""
 
-    queue = (
-        ytmd_data.get("player", {}).get("queue", {}).get("items", [])
-        if isinstance(ytmd_data, dict)
-        else []
-    )
-    # simplify queue items
+def _get_ytmd_raw_state() -> dict:
+    s = _ytmd_state
+    delay = YTMD_STATE_MIN_INTERVAL
+    if not s["stale"]:
+        delay = max(delay, YTMD_CACHE_DELAY)
+    if time.time() - s["fetched_at"] >= delay:
+        s["fetched_at"] = time.time()
+        rc, data = run_ytmdesktop_api_call(["info", "state"])
+        if rc == 0 and isinstance(data, dict):
+            s["data"] = data
+            s["stale"] = False
+        # sinon (401, 429, YTMD fermé...) : on garde le dernier état valide
+    return s["data"] or {}
+
+
+def invalidate_ytmd_status() -> None:
+    # relire /state dès que le rate limit YTMD le permet
+    _ytmd_state["stale"] = True
+
+
+def _patch_ytmd_queue(key: str, value: Any) -> None:
+    # mise à jour "optimiste" du cache après une commande, en attendant la prochaine lecture de /state
+    queue = ((_ytmd_state["data"] or {}).get("player") or {}).get("queue")
+    if isinstance(queue, dict):
+        queue[key] = value
+
+
+def get_ytmd_status() -> dict:
+    # playlist_id, queue, repeat et shuffle d'après l'API YTMD
+    ytmd_data = _get_ytmd_raw_state()
+    queue = (ytmd_data.get("player") or {}).get("queue") or {}
+
+    # RepeatMode YTMD : -1 inconnu, 0 aucun, 1 tout, 2 un seul
+    repeat_state = {1: "all", 2: "one"}.get(queue.get("repeatMode"), "no")
+
     simple_queue = []
-    for item in queue:
+    for item in queue.get("items") or []:
+        if not isinstance(item, dict):  # YTMD 2.1 peut renvoyer des items null
+            continue
         simple_queue.append(
             {
                 "title": item.get("title", ""),
                 "author": item.get("author", ""),
                 "videoId": item.get("videoId", ""),
-                "selected": item.get("selected", False),
+                "selected": bool(item.get("selected", False)),
             }
         )
 
-    # thumbnail_url = ( not that simple
-    #    ytmd_data.get("thumbnail", "") if isinstance(ytmd_data, dict) else ""
-    # )
-
     return {
         "repeat_state": repeat_state,
-        "playlist_id": playlist_id,
+        "shuffle": bool(queue.get("shuffleEnabled", False)),  # fourni depuis YTMD 2.1
+        "playlist_id": ytmd_data.get("playlistId") or "",
         "queue": simple_queue,
-        # "thumbnail_url": thumbnail_url,
-    }  # type: ignore
+    }
 
 
-def get_ytmd_playlist(resetCache: bool = False) -> dict | None:
-    # Call YTMD API for playlist (cached for 30 minutes)
-    if (
-        not hasattr(get_ytmd_playlist, "_cache")
-        or time.time() - get_ytmd_playlist._cache_time > YTMD_PLAYLISTS_CACHE_DELAY
-        or resetCache
-    ):
-        rc, ytmd_data = run_ytmdesktop_api_call(["info", "playlists"])
-        get_ytmd_playlist._cache = ytmd_data or {}
-        get_ytmd_playlist._cache_time = time.time()
-        print(f"{datetime.now()} YTMD data refreshed playlists count: {len(ytmd_data)}")
-    else:
-        ytmd_data = get_ytmd_playlist._cache
-
-    playlists = {}
-    try:
-        for p in ytmd_data:
-            playlists[p.get("id", "")] = p.get("title", "")
-    except Exception:
-        pass
-
-    return playlists  # type: ignore
+def get_ytmd_playlist() -> dict[str, str]:
+    # {id: titre} des playlists, en cache YTMD_PLAYLISTS_CACHE_DELAY (nouvel essai après 30 s en cas d'échec)
+    s = _ytmd_playlists
+    delay = (
+        YTMD_PLAYLISTS_CACHE_DELAY if s["data"] is not None else YTMD_PLAYLISTS_RETRY_DELAY
+    )
+    if time.time() - s["fetched_at"] >= delay:
+        s["fetched_at"] = time.time()
+        rc, data = run_ytmdesktop_api_call(["info", "playlists"])
+        if rc == 0 and isinstance(data, list):
+            s["data"] = {
+                p.get("id", ""): p.get("title", "") for p in data if isinstance(p, dict)
+            }
+            print(f"{datetime.now()} YTMD playlists refreshed, count: {len(s['data'])}")
+    return s["data"] or {}
 
 
-def get_status(resetCache: bool = False) -> dict[str, str | int | float | bool]:
+def get_status() -> dict[str, Any]:
     global config
     global current_photo_image_path
     rc1, out1 = run_playerctl(["status"])
@@ -248,7 +248,7 @@ def get_status(resetCache: bool = False) -> dict[str, str | int | float | bool]:
     vol, muted = get_system_volume()
     pos, length = get_playback_position_and_length()
 
-    ytmd_data = get_ytmd_status(resetCache=resetCache)  # type: ignore
+    ytmd_data = get_ytmd_status()
     hide_photos = config["hidePhotos"]  # type: ignore
 
     photo_image_path = "about:blank"
@@ -279,6 +279,7 @@ def get_status(resetCache: bool = False) -> dict[str, str | int | float | bool]:
         "pos": pos,  # seconds (float)
         "length": length,  # seconds (int, 0 if unknown)
         "repeat_state": ytmd_data["repeat_state"],  # possible: "no", "one", "all"
+        "shuffle": ytmd_data["shuffle"],  # bool
         "playlist_id": ytmd_data["playlist_id"],  # string or empty
         "queue": ytmd_data[
             "queue"
@@ -398,7 +399,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/photos-next": ("xdotool_firefox", ["Right"]),
             "/api/photos-pause": ("xdotool_firefox", ["Up"]),
             "/api/photos-playsignal": ("xdotool_firefox", ["Down"]),
-            "/api/shuffle": ("ytmdesktop", ["command", "shuffle"]),
+            "/api/shuffle": ("forced_infra", []),
             "/api/repeat": ("forced_infra", []),
             "/api/playlist-track-set": ("forced_infra", []),
         }
@@ -471,34 +472,27 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(500, (out + "\n").encode("utf-8", "ignore"))
             return
         if p == "/api/repeat":
-            # toggle repeat mode
-            status = get_status()
-            current = status.get("repeat_state", "no")
-            if current == "no":
-                new_mode = (
-                    "1"  # all (we won't go to "one" loop, because it's less useful)
-                )
-            else:
-                new_mode = "0"  # one
-
-            kind, args = mapping[p]
-            args = [  # type: ignore
-                "command",
-                "repeatMode",
-                None,
-                None,
-                new_mode,
-            ]
-
-            rc, out = run_ytmdesktop_api_call(args)
+            # bascule repeat : aucun <-> tout (on ne passe pas par "un seul", moins utile)
+            current = get_ytmd_status()["repeat_state"]
+            new_mode = 1 if current == "no" else 0  # entier obligatoire pour YTMD
+            rc, out = run_ytmdesktop_api_call(["command", "repeatMode", None, None, new_mode])  # type: ignore
             if rc == 0:
+                _patch_ytmd_queue("repeatMode", new_mode)
+                invalidate_ytmd_status()
                 self._send(200, b"OK\n")
             else:
-                msg = (f"{kind} error: " + (out or "unknown") + "\n").encode(
-                    "utf-8", "ignore"
-                )
-                self._send(500, msg)
-            get_status(resetCache=True)
+                self._send(500, b"ytmdesktop error: repeatMode\n")
+            return
+        if p == "/api/shuffle":
+            # "shuffle" mélange la file ; l'état réel (shuffleEnabled) est relu ensuite dans /state
+            current = get_ytmd_status()["shuffle"]
+            rc, out = run_ytmdesktop_api_call(["command", "shuffle"])
+            if rc == 0:
+                _patch_ytmd_queue("shuffleEnabled", not current)
+                invalidate_ytmd_status()
+                self._send(200, b"OK\n")
+            else:
+                self._send(500, b"ytmdesktop error: shuffle\n")
             return
         if p == "/api/playlist-track-set":
             # Read JSON: {"playlistId": "...", "trackId": "..."}
@@ -528,7 +522,7 @@ class Handler(BaseHTTPRequestHandler):
                     "utf-8", "ignore"
                 )
                 self._send(500, msg)
-            get_status(resetCache=True)
+            invalidate_ytmd_status()
             return
 
         kind, args = mapping[p]

@@ -64,14 +64,9 @@ async function refresh(){
     } else {
       btnRepeat.classList.remove("off");  // on ne distingue pas "one" et "all" visuellement
     }
-    // TODO etat shuffle
-    //const btnShuffle = document.getElementById("btnShuffle");
-    //const shuffleState = s.shuffle_state || "off";
-    //if (shuffleState === "off") {
-    //  btnShuffle.classList.add("off");
-    //} else {
-    //  btnShuffle.classList.remove("off");
-    //}
+    // état shuffle (shuffleEnabled, fourni par YTMD >= 2.1)
+    const btnShuffle = document.getElementById("btnShuffle");
+    btnShuffle.classList.toggle("off", !s.shuffle);
 
     // position / durée
     if (typeof s.length === "number" && s.length > 0) {
@@ -131,6 +126,12 @@ async function refresh(){
     console.error("refresh error:", e);
   }
   }
+
+function toggleShuffle(){
+    // affichage immédiat, confirmé ensuite par /api/status
+    document.getElementById("btnShuffle").classList.toggle("off");
+    send('/api/shuffle');
+}
 
 function toggleRepeat(){
     const btnRepeat = document.getElementById("btnRepeat");
