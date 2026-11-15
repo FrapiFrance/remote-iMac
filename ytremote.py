@@ -3,7 +3,8 @@
 from datetime import datetime
 import json
 import subprocess
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import threading
 from typing import Any
 from urllib.parse import urlparse
 import re
@@ -159,19 +160,28 @@ YTMD_PLAYLISTS_RETRY_DELAY = 30.0
 _ytmd_state: dict[str, Any] = {"data": None, "fetched_at": 0.0, "stale": False}
 _ytmd_playlists: dict[str, Any] = {"data": None, "fetched_at": 0.0}
 
+# Le serveur est multi-thread : une seule lecture YTMD à la fois par cache (les autres
+# requêtes reçoivent le cache sans attendre), et les bascules repeat/shuffle sont sérialisées.
+_ytmd_state_lock = threading.Lock()
+_ytmd_playlists_lock = threading.Lock()
+_ytmd_toggle_lock = threading.Lock()
+
 
 def _get_ytmd_raw_state() -> dict:
     s = _ytmd_state
     delay = YTMD_STATE_MIN_INTERVAL
     if not s["stale"]:
         delay = max(delay, YTMD_CACHE_DELAY)
-    if time.time() - s["fetched_at"] >= delay:
-        s["fetched_at"] = time.time()
-        rc, data = run_ytmdesktop_api_call(["info", "state"])
-        if rc == 0 and isinstance(data, dict):
-            s["data"] = data
-            s["stale"] = False
-        # sinon (401, 429, YTMD fermé...) : on garde le dernier état valide
+    if time.time() - s["fetched_at"] >= delay and _ytmd_state_lock.acquire(blocking=False):
+        try:
+            s["fetched_at"] = time.time()
+            rc, data = run_ytmdesktop_api_call(["info", "state"])
+            if rc == 0 and isinstance(data, dict):
+                s["data"] = data
+                s["stale"] = False
+            # sinon (401, 429, YTMD fermé...) : on garde le dernier état valide
+        finally:
+            _ytmd_state_lock.release()
     return s["data"] or {}
 
 
@@ -222,14 +232,17 @@ def get_ytmd_playlist() -> dict[str, str]:
     delay = (
         YTMD_PLAYLISTS_CACHE_DELAY if s["data"] is not None else YTMD_PLAYLISTS_RETRY_DELAY
     )
-    if time.time() - s["fetched_at"] >= delay:
-        s["fetched_at"] = time.time()
-        rc, data = run_ytmdesktop_api_call(["info", "playlists"])
-        if rc == 0 and isinstance(data, list):
-            s["data"] = {
-                p.get("id", ""): p.get("title", "") for p in data if isinstance(p, dict)
-            }
-            print(f"{datetime.now()} YTMD playlists refreshed, count: {len(s['data'])}")
+    if time.time() - s["fetched_at"] >= delay and _ytmd_playlists_lock.acquire(blocking=False):
+        try:
+            s["fetched_at"] = time.time()
+            rc, data = run_ytmdesktop_api_call(["info", "playlists"])
+            if rc == 0 and isinstance(data, list):
+                s["data"] = {
+                    p.get("id", ""): p.get("title", "") for p in data if isinstance(p, dict)
+                }
+                print(f"{datetime.now()} YTMD playlists refreshed, count: {len(s['data'])}")
+        finally:
+            _ytmd_playlists_lock.release()
     return s["data"] or {}
 
 
@@ -473,23 +486,27 @@ class Handler(BaseHTTPRequestHandler):
             return
         if p == "/api/repeat":
             # bascule repeat : aucun <-> tout (on ne passe pas par "un seul", moins utile)
-            current = get_ytmd_status()["repeat_state"]
-            new_mode = 1 if current == "no" else 0  # entier obligatoire pour YTMD
-            rc, out = run_ytmdesktop_api_call(["command", "repeatMode", None, None, new_mode])  # type: ignore
+            with _ytmd_toggle_lock:
+                current = get_ytmd_status()["repeat_state"]
+                new_mode = 1 if current == "no" else 0  # entier obligatoire pour YTMD
+                rc, out = run_ytmdesktop_api_call(["command", "repeatMode", None, None, new_mode])  # type: ignore
+                if rc == 0:
+                    _patch_ytmd_queue("repeatMode", new_mode)
+                    invalidate_ytmd_status()
             if rc == 0:
-                _patch_ytmd_queue("repeatMode", new_mode)
-                invalidate_ytmd_status()
                 self._send(200, b"OK\n")
             else:
                 self._send(500, b"ytmdesktop error: repeatMode\n")
             return
         if p == "/api/shuffle":
             # "shuffle" mélange la file ; l'état réel (shuffleEnabled) est relu ensuite dans /state
-            current = get_ytmd_status()["shuffle"]
-            rc, out = run_ytmdesktop_api_call(["command", "shuffle"])
+            with _ytmd_toggle_lock:
+                current = get_ytmd_status()["shuffle"]
+                rc, out = run_ytmdesktop_api_call(["command", "shuffle"])
+                if rc == 0:
+                    _patch_ytmd_queue("shuffleEnabled", not current)
+                    invalidate_ytmd_status()
             if rc == 0:
-                _patch_ytmd_queue("shuffleEnabled", not current)
-                invalidate_ytmd_status()
                 self._send(200, b"OK\n")
             else:
                 self._send(500, b"ytmdesktop error: shuffle\n")
@@ -556,4 +573,5 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     print(f"Listening on http://{HOST}:{PORT}  (Ctrl+C to stop)")
-    HTTPServer((HOST, PORT), Handler).serve_forever()
+    # multi-thread : un /api/status lent (playerctl, pactl, YTMD) ne bloque plus les boutons
+    ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
