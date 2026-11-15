@@ -54,8 +54,13 @@ def ytmdesktop_api_call(  # type: ignore
         # for header, value in status.headers.items():
         #    if header.lower().startswith("x-ratelimit-"):
         #        print(f"{action} {header}: {value}")
-        with open(script_dir / "run" / f"{action}.json", "w") as f:
-            json.dump(state, f, indent=2, ensure_ascii=False)
+        # run/<action>.json : dernière réponse en erreur, pour le diagnostic (supprimé quand ça remarche)
+        debug_file = script_dir / "run" / f"{action}.json"
+        if status.status_code == 200:
+            debug_file.unlink(missing_ok=True)
+        else:
+            with open(debug_file, "w") as f:
+                json.dump(state, f, indent=2, ensure_ascii=False)
         return status.status_code == 200, state
     elif mode == "command":
         url = f"{baseUrl}command"

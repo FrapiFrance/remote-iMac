@@ -37,6 +37,7 @@ Il y a un certain nombre de packages nécessaires :
 - xdotool,
 - playerctl,
 - pactl
+- python3-requests
 - je crois que c'est tout
 
 et le fichier [run_at_start.sh](run_at_start.sh) donne un bon exemple de comment lancer les bons programmes (firefox et YouTubeMusicDesktop)

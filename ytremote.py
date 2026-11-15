@@ -58,8 +58,9 @@ with open(os.path.join(SCRIPT_DIR, "js", "ytremote.js"), "r", encoding="utf-8") 
     JS = f.read()
 
 
-# sorties en anglais, pour pouvoir les parser (pactl en français répond "Mute: oui")
-CMD_ENV = {**os.environ, "LC_ALL": "C"}
+# - LC_ALL=C : sorties en anglais, pour pouvoir les parser (pactl en français répond "Mute: oui")
+# - DISPLAY : xdotool agit sur l'écran de l'iMac
+CMD_ENV = {**os.environ, "LC_ALL": "C", "DISPLAY": os.environ.get("DISPLAY", ":0")}
 
 
 def run_cmd(cmd: list[str]) -> tuple[int, str]:
@@ -80,74 +81,70 @@ def run_ytmdesktop_api_call(args: list[str | None]) -> tuple[int, dict | None]:
     return (0 if ok else 1), data
 
 
-def run_xdotool_key(keysym: str) -> tuple[int, str]:
-    # Use a shell so we can "export DISPLAY=:0 && ..."
-    cmd = ["bash", "-lc", f"export DISPLAY=:0; xdotool key {keysym}"]
-    try:
-        return run_cmd(cmd)
-    except Exception as e:
-        return 1, str(e)
-
-
 def run_xdotool_key_to_firefox(keysym: str) -> tuple[int, str]:
-    # active une fenêtre Firefox puis envoie la touche
-    # --onlyvisible évite les fenêtres cachées ; --class firefox marche bien en général
-    cmd = [
-        "bash",
-        "-lc",
-        "export DISPLAY=:0; "
-        "WID=$(xdotool search --onlyvisible --class firefox | head -n1); "
-        'if [ -z "$WID" ]; then exit 2; fi; '
-        # pas nécessaire d'activer la fenêtre
-        #'xdotool windowactivate --sync "$WID"; '
-        f'xdotool key --window "$WID" {keysym}',
-    ]
+    # envoie la touche à la première fenêtre Firefox visible (pas besoin de l'activer)
     try:
-        return run_cmd(cmd)
+        rc, out = run_cmd(["xdotool", "search", "--onlyvisible", "--class", "firefox"])
+        wid = out.split()[0] if rc == 0 and out else ""
+        if not wid:
+            return 2, "no visible Firefox window"
+        return run_cmd(["xdotool", "key", "--window", wid, keysym])
     except Exception as e:
         return 1, str(e)
 
 
-def get_system_volume():
-    # Returns (volume_int_0_100, muted_bool)
-    rc, out = run_cmd(["bash", "-lc", "pactl get-sink-volume @DEFAULT_SINK@"])
-    vol = None
-    if rc == 0:
-        # Example: "Volume: front-left: 65536 / 100% / 0.00 dB, ..."
-
-        m = re.search(r"(\d+)%", out)
-        if m:
-            vol = int(m.group(1))
-
-    rc2, out2 = run_cmd(["bash", "-lc", "pactl get-sink-mute @DEFAULT_SINK@"])
-    muted = False
-    if rc2 == 0:
-        muted = "yes" in out2.lower()
-
-    return (vol if vol is not None else 0, muted)
+def run_pactl(args: list[str]) -> tuple[int, str]:
+    try:
+        return run_cmd(["pactl"] + args)
+    except Exception as e:
+        return 1, str(e)
 
 
-def get_playback_position_and_length():
-    # position: seconds (float), length: seconds (int) if known
-    rc_pos, out_pos = run_playerctl(["position"])
-    pos = 0.0
-    if rc_pos == 0:
+def get_system_volume() -> tuple[int, bool]:
+    # (volume 0..100, muted)
+    # ex. : "Volume: front-left: 65536 / 100% / 0.00 dB, ..."
+    rc, out = run_pactl(["get-sink-volume", "@DEFAULT_SINK@"])
+    m = re.search(r"(\d+)%", out) if rc == 0 else None
+    vol = int(m.group(1)) if m else 0
+    # ex. : "Mute: yes"
+    rc2, out2 = run_pactl(["get-sink-mute", "@DEFAULT_SINK@"])
+    muted = rc2 == 0 and "yes" in out2.lower()
+    return vol, muted
+
+
+def set_system_volume(v: int) -> tuple[int, str]:
+    # volume 0..100 ; 0 => mute, > 0 => unmute
+    v = max(0, min(100, int(v)))
+    rc, out = run_pactl(["set-sink-mute", "@DEFAULT_SINK@", "1" if v == 0 else "0"])
+    if rc != 0:
+        return rc, out
+    return run_pactl(["set-sink-volume", "@DEFAULT_SINK@", f"{v}%"])
+
+
+def get_player_status() -> dict[str, Any]:
+    # un seul appel playerctl pour statut, titre, artiste, position et durée
+    # (position et mpris:length en microsecondes)
+    fields = ["status", "title", "artist", "position", "mpris:length"]
+    fmt = "\x1f".join("{{" + f + "}}" for f in fields)
+    rc, out = run_playerctl(["metadata", "--format", fmt])
+    parts = out.split("\x1f") if rc == 0 else []
+    if len(parts) != len(fields):
+        return {"status": "Unknown", "title": "", "artist": "", "pos": 0.0, "length": 0}
+    status, title, artist, pos_us, len_us = (x.strip() for x in parts)
+
+    def to_int(x: str) -> int:
         try:
-            pos = float(out_pos.strip())
-        except Exception:
-            pos = 0.0
+            return max(0, int(x))
+        except ValueError:
+            return 0
 
-    # mpris:length is microseconds
-    rc_len, out_len = run_playerctl(["metadata", "--format", "{{mpris:length}}"])
-    length = 0
-    if rc_len == 0:
-        try:
-            us = int(out_len.strip())
-            length = max(0, us // 1_000_000)
-        except Exception:
-            length = 0
-
-    return pos, length
+    return {
+        "status": status or "Unknown",
+        "title": title,
+        "artist": artist,
+        "pos": to_int(pos_us) / 1_000_000,
+        "length": to_int(len_us) // 1_000_000,
+    }
 
 
 def set_playback_position(seconds: float):
@@ -253,17 +250,8 @@ def get_ytmd_playlist() -> dict[str, str]:
 def get_status() -> dict[str, Any]:
     global config
     global current_photo_image_path
-    rc1, out1 = run_playerctl(["status"])
-    status = out1.strip() if rc1 == 0 else "Unknown"
-
-    rc2, out2 = run_playerctl(["metadata", "--format", "{{title}}|||{{artist}}"])
-    title = artist = ""
-    if rc2 == 0:
-        parts = out2.split("|||", 1)
-        title = parts[0].strip() if len(parts) > 0 else ""
-        artist = parts[1].strip() if len(parts) > 1 else ""
+    player = get_player_status()
     vol, muted = get_system_volume()
-    pos, length = get_playback_position_and_length()
 
     ytmd_data = get_ytmd_status()
     hide_photos = config["hidePhotos"]  # type: ignore
@@ -288,13 +276,13 @@ def get_status() -> dict[str, Any]:
             print(f"{datetime.now()} photo_image_path read error: {e}")
 
     return {
-        "status": status,
-        "title": title,
-        "artist": artist,
+        "status": player["status"],
+        "title": player["title"],
+        "artist": player["artist"],
         "volume": vol,
         "muted": muted,
-        "pos": pos,  # seconds (float)
-        "length": length,  # seconds (int, 0 if unknown)
+        "pos": player["pos"],  # seconds (float)
+        "length": player["length"],  # seconds (int, 0 if unknown)
         "repeat_state": ytmd_data["repeat_state"],  # possible: "no", "one", "all"
         "shuffle": ytmd_data["shuffle"],  # bool
         "playlist_id": ytmd_data["playlist_id"],  # string or empty
@@ -407,8 +395,6 @@ class Handler(BaseHTTPRequestHandler):
             "/api/play-pause": ("playerctl", ["play-pause"]),
             "/api/next": ("playerctl", ["next"]),
             "/api/previous": ("playerctl", ["previous"]),
-            "/api/vol-up": ("xdotool", ["XF86AudioRaiseVolume"]),
-            "/api/vol-down": ("xdotool", ["XF86AudioLowerVolume"]),
             "/api/vol-set": ("forced_infra", []),
             "/api/mute-toggle": ("forced_infra", []),
             "/api/seek-set": ("forced_infra", []),
@@ -434,38 +420,14 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, b"Bad JSON\n")
                 return
 
-            v = max(0, min(100, val))
-
-            # Rule:
-            # - volume == 0 => mute ON
-            # - volume  > 0 => mute OFF
-            if v == 0:
-                rc_m, out_m = run_cmd(
-                    ["bash", "-lc", "pactl set-sink-mute @DEFAULT_SINK@ 1"]
-                )
-                if rc_m != 0:
-                    self._send(500, (out_m + "\n").encode("utf-8", "ignore"))
-                    return
-            else:
-                rc_u, out_u = run_cmd(
-                    ["bash", "-lc", "pactl set-sink-mute @DEFAULT_SINK@ 0"]
-                )
-                if rc_u != 0:
-                    self._send(500, (out_u + "\n").encode("utf-8", "ignore"))
-                    return
-
-            rc, out = run_cmd(
-                ["bash", "-lc", f"pactl set-sink-volume @DEFAULT_SINK@ {v}%"]
-            )
+            rc, out = set_system_volume(val)
             if rc == 0:
                 self._send(200, b"OK\n")
             else:
                 self._send(500, (out + "\n").encode("utf-8", "ignore"))
             return
         if p == "/api/mute-toggle":
-            rc, out = run_cmd(
-                ["bash", "-lc", "pactl set-sink-mute @DEFAULT_SINK@ toggle"]
-            )
+            rc, out = run_pactl(["set-sink-mute", "@DEFAULT_SINK@", "toggle"])
             if rc == 0:
                 self._send(200, b"OK\n")
             else:
@@ -552,10 +514,8 @@ class Handler(BaseHTTPRequestHandler):
         elif kind == "ytmdesktop":
             rc, out = run_ytmdesktop_api_call(args)  # type: ignore
             out = str(out) if out is not None else ""  # type: ignore
-        elif kind == "xdotool_firefox":
+        else:  # xdotool_firefox
             rc, out = run_xdotool_key_to_firefox(args[0])
-        else:
-            rc, out = run_xdotool_key(args[0])
 
         if rc == 0:
             self._send(200, b"OK\n")
