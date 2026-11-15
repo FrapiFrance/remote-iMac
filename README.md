@@ -42,6 +42,9 @@ Il y a un certain nombre de packages nécessaires :
 
 et le fichier [run_at_start.sh](run_at_start.sh) donne un bon exemple de comment lancer les bons programmes (firefox et YouTubeMusicDesktop)
 
+Firefox y est lancé en `--kiosk` (plein écran). Pour YTMD, derrière, en plein écran aussi, une règle de fenêtre KDE suffit (X11 comme Wayland) :
+Configuration du système > Gestion des fenêtres > Règles de fenêtres > Ajouter une nouvelle règle > « Détecter les propriétés de la fenêtre », cliquer sur YTMD, puis ajouter la propriété « Plein écran » : Forcer, Oui.
+
 ça pourrait servir à commander plein d'autres trucs (via xdotool et p*ctl, voire d'autres commandes, c'est open)
 
 ### TODO
