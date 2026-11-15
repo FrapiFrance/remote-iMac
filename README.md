@@ -28,6 +28,13 @@ Il faut avoir MagicMirror avec [MMM-BackgroundSlideshow](https://github.com/dari
 Ça affiche en diaporama les photos d'un répertoire de votre disque. Par exemple, que vous auriez récupéré d'un TakeOut GooglePhotos... Avec Keypress, l'affichage est commandé par les flèches, et la télécommande simule les flèches avec xdotool.
 Je l'utilise en mode server only docker, avec un firefox en client (et ça marche  même avec plusieurs clients en même temps, local et distants !)
 
+## écran
+
+L'écran s'éteint après quelques minutes (gestion de l'énergie de KDE) et se rallume quand la webcam détecte un mouvement : [motion](https://motion-project.github.io/) appelle [wake-screen.sh](wake-screen.sh) (`on_event_start` dans `motion.conf`).
+Sous X11, le script simule un mouvement de souris (xdotool) ; sous Wayland, il rallume l'écran avec `kscreen-doctor --dpms on`.
+
+Si motion tourne en service utilisateur systemd, le démarrer avec la session graphique (`WantedBy=graphical-session.target`), pour qu'il hérite de `WAYLAND_DISPLAY`.
+
 ## prérequis
 
 L'ordi concerné est sous kubuntu 24.04 (**X11** nécessaire, pas Wayland)
