@@ -58,8 +58,12 @@ with open(os.path.join(SCRIPT_DIR, "js", "ytremote.js"), "r", encoding="utf-8") 
     JS = f.read()
 
 
+# sorties en anglais, pour pouvoir les parser (pactl en français répond "Mute: oui")
+CMD_ENV = {**os.environ, "LC_ALL": "C"}
+
+
 def run_cmd(cmd: list[str]) -> tuple[int, str]:
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=2, env=CMD_ENV)
     return proc.returncode, (proc.stdout + proc.stderr).strip()
 
 
