@@ -89,9 +89,13 @@ def send_slideshow_notification(action: str) -> tuple[int, str]:
         headers["Authorization"] = f"apiKey {config['magicMirrorApiKey']}"
     try:
         r = requests.post(url, headers=headers, timeout=3)
+        error = None if r.ok else f"HTTP {r.status_code} {r.text}"
     except Exception as e:
-        return 1, f"{type(e).__name__}: {e}"
-    return (0, "") if r.ok else (1, f"HTTP {r.status_code} {r.text}")
+        error = f"{type(e).__name__}: {e}"
+    if error:
+        print(f"{datetime.now()} MagicMirror {action}: {error}")
+        return 1, error
+    return 0, ""
 
 
 def run_pactl(args: list[str]) -> tuple[int, str]:
