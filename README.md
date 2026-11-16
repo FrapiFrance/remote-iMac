@@ -27,6 +27,11 @@ Il faut avoir MagicMirror avec [MMM-BackgroundSlideshow](https://github.com/dari
 
 Ça affiche en diaporama les photos d'un répertoire de votre disque. Par exemple, que vous auriez récupéré d'un TakeOut GooglePhotos... La télécommande pilote le diaporama en envoyant les notifications `BACKGROUNDSLIDESHOW_PREVIOUS`, `_NEXT`, `_PAUSE` et `_SIGNAL_PHOTO` via l'API de MMM-Remote-Control (`magicMirrorUrl` et `magicMirrorApiKey` dans `run/config.json`).
 Avec [MMM-Keypress](https://github.com/ItsMeBrille/MMM-Keypress) en plus, on peut aussi utiliser les flèches d'un clavier.
+
+Deux pièges avec MMM-Remote-Control :
+
+- depuis sa v6, il exige MagicMirror 2.38. Avec une version plus ancienne, le navigateur l'ignore (console : `Version is incorrect, Skip module MMM-Remote-Control`) et l'API répond `success` sans que rien ne se passe. Il faut alors prendre la v5.1.1 : `git checkout v5.1.1 && npm install` dans son dossier.
+- dans `config.js`, ne pas lui donner de `position` : sinon il affiche son URL et un QR code à l'écran. Sans `position`, il fonctionne quand même.
 Je l'utilise en mode server only docker, avec un firefox en client (et ça marche  même avec plusieurs clients en même temps, local et distants !)
 
 ## écran
