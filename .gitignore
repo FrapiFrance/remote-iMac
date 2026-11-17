@@ -2,3 +2,4 @@ run/config.json
 run/state.json
 run/playlists.json
 __pycache__/
+.venv/

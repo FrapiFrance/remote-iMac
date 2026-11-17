@@ -29,7 +29,7 @@ def ytmdesktop_api_call(  # type: ignore
     action: str,
     playlistId: str | None = None,  # for changeVideo
     videoId: str | None = None,  # for changeVideo
-    data: str | int | None = None,  # for repeat (int !), or some other commands
+    data: str | int | dict | None = None,  # repeatMode (int !), queueAdd (dict)...
 ) -> tuple[bool, dict | None]:  # type: ignore
     # if (mode, action) != ("info", "state"):
     #     print(

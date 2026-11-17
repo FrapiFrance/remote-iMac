@@ -312,6 +312,52 @@ button{
   opacity: .85;
 }
 
+/* Search overlay */
+.search-form{
+  margin-top: 12px;
+  display:flex;
+  gap: 8px;
+}
+.search-form input{
+  flex: 1;
+  min-width: 0;
+  font-size: 16px; /* >= 16px : pas de zoom automatique sur iPhone */
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 2px solid rgba(255,255,255,.18);
+  background: rgba(255,255,255,.10);
+  color:#fff;
+}
+.seg{
+  margin-top: 10px;
+  display:grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.seg button{
+  border: 2px solid rgba(255,255,255,.14);
+  border-radius: 12px;
+  background: rgba(255,255,255,.10);
+  color:#fff;
+  padding: 8px 6px;
+  font-weight: 800;
+  cursor:pointer;
+}
+.seg button.active{
+  background:#66A0D3;
+  color:#000;
+}
+.sitem{
+  display:flex;
+  align-items:center;
+  gap: 8px;
+  cursor: default;
+}
+.sitem .stext{
+  flex: 1;
+  min-width: 0; /* pour que les "…" fonctionnent */
+}
+
 
 /* Photos block */
 .photos{

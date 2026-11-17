@@ -100,6 +100,9 @@ async function refresh(){
     }
     await uiUpdatePlaylistLabel();
 
+    // recherche disponible (ytmusicapi installé côté serveur)
+    document.getElementById("btnSearch").hidden = !s.search;
+
     // etat queue
     window.currentQueue = s.queue || []; // list of {"title":..., "author":..., "videoId":..., "selected":false/true}
     const qOverlay = document.getElementById("qOverlay");
@@ -264,6 +267,94 @@ async function uiSelectQueueItem(videoId) {
   }
 }
 
+// ===== Recherche (YouTube Music, via ytmusicapi côté serveur)
+let searchKind = "songs";
+
+function uiToggleSearch() {
+  const overlay = document.getElementById("sOverlay");
+  if (!overlay) return;
+
+  const show = !overlay.classList.contains("show");
+  overlay.classList.toggle("show", show);
+  overlay.setAttribute("aria-hidden", String(!show));
+
+  if (show) document.getElementById("searchInput").focus();
+}
+
+function uiSearchKind(btn) {
+  searchKind = btn.dataset.kind;
+  for (const b of btn.parentElement.children) b.classList.toggle("active", b === btn);
+  if (document.getElementById("searchInput").value.trim()) uiSearch();
+}
+
+async function uiSearch() {
+  const input = document.getElementById("searchInput");
+  const listEl = document.getElementById("slist");
+  const q = input.value.trim();
+  if (!q) return;
+  input.blur(); // referme le clavier du téléphone
+
+  listEl.innerHTML = '<div style="opacity:.7">Recherche…</div>';
+  try {
+    const r = await fetch(`/api/search?type=${searchKind}&q=${encodeURIComponent(q)}`, { cache: "no-store" });
+    if (!r.ok) throw new Error(await r.text());
+    uiRenderSearch(await r.json());
+  } catch (e) {
+    listEl.innerHTML = "";
+    const err = document.createElement("div");
+    err.style.opacity = ".7";
+    err.textContent = "Erreur : " + e.message;
+    listEl.appendChild(err);
+  }
+}
+
+function uiRenderSearch(results) {
+  const listEl = document.getElementById("slist");
+  if (!results.length) {
+    listEl.innerHTML = '<div style="opacity:.7">Aucun résultat</div>';
+    return;
+  }
+
+  listEl.innerHTML = "";
+  for (const item of results) {
+    const row = document.createElement("div");
+    row.className = "qitem sitem";
+    row.innerHTML = `
+      <div class="stext">
+        <div class="qtitle">${escapeHtml(item.title || "—")}</div>
+        <div class="qauthor">${escapeHtml(item.subtitle || "")}</div>
+      </div>
+      <button type="button" class="btn-close" aria-label="Lire maintenant"><i class="fa-solid fa-play"></i></button>
+      <button type="button" class="btn-close" aria-label="À la suite"><i class="fa-solid fa-plus"></i></button>
+    `;
+    const [btnPlay, btnNext] = row.querySelectorAll("button");
+    btnPlay.addEventListener("click", () => uiPlayFromSearch(item, "play", btnPlay));
+    btnNext.addEventListener("click", () => uiPlayFromSearch(item, "next", btnNext));
+    listEl.appendChild(row);
+  }
+}
+
+async function uiPlayFromSearch(item, mode, btn) {
+  try {
+    const r = await fetch("/api/search-play", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ videoId: item.videoId, playlistId: item.playlistId, mode }),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    if (navigator.vibrate) navigator.vibrate(15);
+    if (mode === "play") {
+      uiToggleSearch(); // on referme : la musique a changé
+    } else {
+      // on reste dans la recherche, avec une coche en confirmation
+      btn.innerHTML = '<i class="fa-solid fa-check"></i>';
+      btn.disabled = true;
+    }
+  } catch (e) {
+    alert("Erreur : " + e.message);
+  }
+}
+
 // petit helper pour éviter d’injecter du HTML depuis les titres
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({
@@ -407,6 +498,14 @@ function uiShowTab(which) {
   if (!overlay) return;
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay) uiTogglePlaylists();
+  });
+})();
+
+(function () {
+  const overlay = document.getElementById("sOverlay");
+  if (!overlay) return;
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) uiToggleSearch();
   });
 })();
 

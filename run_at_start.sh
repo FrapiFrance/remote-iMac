@@ -47,7 +47,10 @@ log "serveur $URL: attendu ${i}s"
 firefox --kiosk "$URL" > ~/error_kiosk.log 2>&1 &
 
 # --- YOUTUBE MUSIC REMOTE ---
-~/remote-iMac/ytremote.py > ~/error_ytremote.log 2>&1 &
+# le Python du venv du projet s'il existe (recherche avec ytmusicapi), sinon celui du système
+PY=~/remote-iMac/.venv/bin/python
+[ -x "$PY" ] || PY=python3
+"$PY" ~/remote-iMac/ytremote.py > ~/error_ytremote.log 2>&1 &
 
 # --- MOTION ---
 # inutile, il est en service

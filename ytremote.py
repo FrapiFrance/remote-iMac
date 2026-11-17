@@ -6,14 +6,19 @@ import subprocess
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import threading
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote, parse_qs
 import re
 import os
 import time
 import requests
 from config import config
-from urllib.parse import unquote
 from ytm_api_client import ytmdesktop_api_call  # type: ignore
+
+# Recherche dans YouTube Music : facultative, nécessite ytmusicapi (voir README, venv)
+try:
+    from ytmusicapi import YTMusic  # type: ignore
+except ImportError:
+    YTMusic = None
 
 if config["playerctl_player"] is not None:
     PLAYER = config["playerctl_player"]
@@ -252,6 +257,63 @@ def get_ytmd_playlist() -> dict[str, str]:
     return s["data"] or {}
 
 
+# location="FR" : résultats pour la France. Ne pas mettre language="fr" : ytmusicapi repère
+# les sections de résultats par leur titre anglais, et les recherches filtrées reviennent vides.
+SEARCH_LOCATION = "FR"
+SEARCH_LIMIT = 20
+SEARCH_FILTERS = {"songs", "albums", "playlists"}
+_ytmusic = None
+_ytmusic_lock = threading.Lock()
+
+
+def search_music(query: str, kind: str) -> list[dict[str, str]]:
+    # résultats simplifiés : title, subtitle, et videoId (morceau) ou playlistId (album, playlist)
+    global _ytmusic
+    with _ytmusic_lock:
+        if _ytmusic is None:
+            _ytmusic = YTMusic(location=SEARCH_LOCATION)  # type: ignore
+        ytm = _ytmusic
+    results = []
+    # limit n'est qu'un minimum pour ytmusicapi, d'où la coupe
+    for r in ytm.search(query, filter=kind, limit=SEARCH_LIMIT)[:SEARCH_LIMIT]:
+        artists = ", ".join(a.get("name", "") for a in r.get("artists") or [] if a.get("name"))
+        if kind == "songs" and r.get("videoId"):
+            album = (r.get("album") or {}).get("name") or ""
+            results.append({
+                "title": r.get("title", ""),
+                "subtitle": " · ".join(x for x in (artists, album, r.get("duration") or "") if x),
+                "videoId": r["videoId"],
+            })
+        elif kind == "albums" and r.get("playlistId"):
+            results.append({
+                "title": r.get("title", ""),
+                "subtitle": " · ".join(x for x in (artists, r.get("year") or "") if x),
+                "playlistId": r["playlistId"],
+            })
+        elif kind == "playlists" and str(r.get("browseId", "")).startswith("VL"):
+            # browseId = "VL" + playlistId
+            results.append({
+                "title": r.get("title", ""),
+                "subtitle": r.get("author") or "",
+                "playlistId": r["browseId"][2:],
+            })
+    return results
+
+
+def play_from_search(video_id: str | None, playlist_id: str | None, mode: str) -> tuple[int, Any]:
+    # mode "play" : lecture immédiate ; "next" : ajout dans la file juste après le morceau en cours
+    if mode == "play":
+        return run_ytmdesktop_api_call(["command", "changeVideo", playlist_id, video_id])
+    queue = ((_get_ytmd_raw_state().get("player") or {}).get("queue")) or {}
+    items = queue.get("items") or []
+    selected = queue.get("selectedItemIndex", -1)
+    index = selected + 1 if isinstance(selected, int) and 0 <= selected < len(items) else len(items)
+    # YTMD veut soit videoId, soit playlistId, pas les deux
+    data: dict[str, Any] = {"videoId": video_id} if video_id else {"playlistId": playlist_id}
+    data["index"] = index
+    return run_ytmdesktop_api_call(["command", "queueAdd", None, None, data])  # type: ignore
+
+
 def get_status() -> dict[str, Any]:
     global config
     global current_photo_image_path
@@ -295,6 +357,7 @@ def get_status() -> dict[str, Any]:
             "queue"
         ],  # list of {"title":..., "author":..., "videoId":..., "selected":false/true} # type: ignore
         "hide_photos": hide_photos,
+        "search": YTMusic is not None,  # recherche disponible (ytmusicapi installé)
         "photo_image_path": photo_image_path,
     }
 
@@ -341,6 +404,29 @@ class Handler(BaseHTTPRequestHandler):
             self._send(
                 200,
                 json.dumps(get_status()).encode("utf-8"),
+                "application/json; charset=utf-8",
+            )
+            return
+        if p == "/api/search":
+            # /api/search?q=...&type=songs|albums|playlists
+            if YTMusic is None:
+                self._send(503, b"ytmusicapi absent : recherche indisponible\n")
+                return
+            qs = parse_qs(urlparse(self.path).query)
+            query = qs.get("q", [""])[0].strip()
+            kind = qs.get("type", ["songs"])[0]
+            if not query or kind not in SEARCH_FILTERS:
+                self._send(400, b"Bad request\n")
+                return
+            try:
+                results = search_music(query, kind)
+            except Exception as e:
+                print(f"{datetime.now()} search error: {type(e).__name__}: {e}")
+                self._send(502, f"Erreur de recherche : {e}\n".encode("utf-8", "ignore"))
+                return
+            self._send(
+                200,
+                json.dumps(results).encode("utf-8"),
                 "application/json; charset=utf-8",
             )
             return
@@ -411,6 +497,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/shuffle": ("forced_infra", []),
             "/api/repeat": ("forced_infra", []),
             "/api/playlist-track-set": ("forced_infra", []),
+            "/api/search-play": ("forced_infra", []),
         }
         if p not in mapping:
             self._send(404, b"Not found\n")
@@ -482,6 +569,27 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, b"OK\n")
             else:
                 self._send(500, b"ytmdesktop error: shuffle\n")
+            return
+        if p == "/api/search-play":
+            # Read JSON: {"videoId": "..."} ou {"playlistId": "..."}, et "mode": "play" | "next"
+            length = int(self.headers.get("Content-Length", "0") or "0")
+            raw = self.rfile.read(length) if length > 0 else b"{}"
+            try:
+                data = json.loads(raw.decode("utf-8", "ignore"))
+                video_id = data.get("videoId") or None
+                playlist_id = data.get("playlistId") or None
+                mode = data.get("mode", "play")
+                if not (video_id or playlist_id) or mode not in ("play", "next"):
+                    raise ValueError
+            except Exception:
+                self._send(400, b"Bad JSON\n")
+                return
+            rc, out = play_from_search(video_id, playlist_id, mode)
+            invalidate_ytmd_status()
+            if rc == 0:
+                self._send(200, b"OK\n")
+            else:
+                self._send(500, f"ytmdesktop error: {mode}\n".encode())
             return
         if p == "/api/playlist-track-set":
             # Read JSON: {"playlistId": "...", "trackId": "..."}
