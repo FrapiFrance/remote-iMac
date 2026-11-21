@@ -26,6 +26,8 @@ Les radios nationales de Radio France en direct (France Inter, franceinfo, Franc
 
 En mode radio : lecture/pause coupe et relance le direct, précédent / suivant changent de station, aléatoire, répéter et la position sont désactivés. Choisir une playlist, un morceau de la file ou « Lire » dans la recherche revient à YTMD.
 
+Avec le paquet `mpv-mpris` en plus, la radio se pilote aussi depuis l'iMac : touches multimédia du clavier et lecteur multimédia de la barre des tâches KDE, où elle apparaît sous le nom de la station. La télécommande ne pilote alors YTMD que par son nom MPRIS, `playerctl_player` (par défaut `ytmdesktop`, voir `playerctl -l`).
+
 ### recherche (facultative)
 
 Le bouton loupe cherche dans tout YouTube Music (morceaux, albums, playlists), pour lancer un résultat tout de suite ou l'ajouter à la suite du morceau en cours. L'API de YTMD ne sait pas chercher : la recherche passe par [ytmusicapi](https://github.com/sigma67/ytmusicapi), bibliothèque non officielle, absente des dépôts Ubuntu. Elle s'installe dans un venv du projet :
@@ -69,7 +71,7 @@ Il y a un certain nombre de packages nécessaires :
 - pactl
 - python3-requests
 - python3-venv, pour la recherche (voir plus haut)
-- mpv, pour les radios (voir plus haut)
+- mpv, pour les radios, et mpv-mpris pour les piloter aussi au clavier (voir plus haut)
 - je crois que c'est tout
 
 et le fichier [run_at_start.sh](run_at_start.sh) donne un bon exemple de comment lancer les bons programmes (firefox et YouTubeMusicDesktop)

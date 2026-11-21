@@ -76,11 +76,15 @@ def run_cmd(cmd: list[str]) -> tuple[int, str]:
     return proc.returncode, (proc.stdout + proc.stderr).strip()
 
 
-def run_playerctl(args: list[str]):
+def run_cmd_safe(cmd: list[str]) -> tuple[int, str]:
     try:
-        return run_cmd(BASE_CMD + args)
+        return run_cmd(cmd)
     except Exception as e:
         return 1, str(e)
+
+
+def run_playerctl(args: list[str]):
+    return run_cmd_safe(BASE_CMD + args)
 
 
 def run_ytmdesktop_api_call(args: list[str | None]) -> tuple[int, dict | None]:
@@ -107,10 +111,7 @@ def send_slideshow_notification(action: str) -> tuple[int, str]:
 
 
 def run_pactl(args: list[str]) -> tuple[int, str]:
-    try:
-        return run_cmd(["pactl"] + args)
-    except Exception as e:
-        return 1, str(e)
+    return run_cmd_safe(["pactl"] + args)
 
 
 def get_system_volume() -> tuple[int, bool]:
@@ -357,20 +358,31 @@ def radio_play(station: str) -> None:
         if _radio["station"] is None:
             run_playerctl(["pause"])
         _radio["station"] = station
-        # --load-scripts=no : pas de plugin MPRIS, playerctl continue de ne voir que YTMD
+        # avec le paquet mpv-mpris, mpv apparaît dans KDE (touches multimédia, lecteur de la
+        # barre des tâches) sous le nom de la station ; playerctl_player garde YTMD pour le reste
         _radio["proc"] = subprocess.Popen(
-            [MPV, "--no-video", "--really-quiet", "--load-scripts=no", RADIO_URL.format(station)],
+            [MPV, "--no-video", "--really-quiet",
+             f"--force-media-title={RADIO_NAMES[station]}", RADIO_URL.format(station)],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
 
 
+def _radio_playing() -> bool:
+    # mpv tourne, et n'a pas été mis en pause au clavier (MPRIS, si mpv-mpris est installé)
+    proc = _radio["proc"]
+    if proc is None or proc.poll() is not None:
+        return False
+    rc, out = run_cmd_safe(["playerctl", "-p", "mpv", "status"])
+    return not (rc == 0 and out.strip() == "Paused")
+
+
 def radio_toggle() -> None:
     # en direct, une pause n'a pas de sens : on coupe, et on relance le direct
+    # (y compris après une pause au clavier, pour repartir du direct et non du tampon)
     with _radio_lock:
-        playing = _radio["proc"] is not None and _radio["proc"].poll() is None
+        playing = _radio_playing()
         station = _radio["station"]
-        if playing:
-            _radio_stop_proc()
+        _radio_stop_proc()
     if not playing and station:
         radio_play(station)
 
@@ -437,11 +449,10 @@ def radio_status() -> dict[str, Any] | None:
     station = _radio["station"]
     if station is None:
         return None
-    proc = _radio["proc"]
     return {
         "id": station,
         "name": RADIO_NAMES.get(station, station),
-        "playing": proc is not None and proc.poll() is None,
+        "playing": _radio_playing(),
         "now": radio_now_playing(station),  # émission ou morceau en cours, ou ""
     }
 

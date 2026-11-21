@@ -16,7 +16,8 @@ def load_config() -> dict:  # type: ignore
     # MagicMirror + MMM-Remote-Control, pour piloter le diaporama
     config["magicMirrorUrl"] = config.get("magicMirrorUrl", "http://localhost:8080")
     config["magicMirrorApiKey"] = config.get("magicMirrorApiKey", "")
-    config["playerctl_player"] = config.get("playerctl_player", None)
+    # lecteur MPRIS de YTMD 2.1 ; null = le premier lecteur trouvé par playerctl
+    config["playerctl_player"] = config.get("playerctl_player", "ytmdesktop")
     config["youtubemusicdesktop_state_cache_delay"] = config.get(
         "youtubemusicdesktop_state_cache_delay", 5
     )
