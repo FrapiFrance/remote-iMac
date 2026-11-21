@@ -263,6 +263,18 @@ button{
   cursor:pointer;
 }
 
+.plist-head{
+  margin-top: 6px;
+  font-weight: 900;
+  font-size: 13px;
+  opacity: .75;
+  display:flex;
+  align-items:center;
+  gap: 8px;
+}
+
+.btn-icon:disabled{ cursor: default; }
+
 .plist button.selected{
   background:#66A0D3;
   color:#000;

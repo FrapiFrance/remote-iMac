@@ -98,6 +98,17 @@ async function refresh(){
       // console.log("normal playlist id update");
       window.currentPlaylistId = s.playlist_id || null;
     }
+    // mode radio : station en cours (ou null), et liste des radios disponibles
+    window.currentRadio = s.radio || null;
+    window.radios = s.radios || [];
+    const isRadio = !!window.currentRadio;
+    for (const id of ["btnShuffle", "btnRepeat"]) {
+      const b = document.getElementById(id);
+      b.disabled = isRadio;
+      if (isRadio) b.classList.add("off");
+    }
+    document.getElementById("pos").disabled = isRadio;
+
     await uiUpdatePlaylistLabel();
 
     // recherche disponible (ytmusicapi installé côté serveur)
@@ -217,6 +228,18 @@ function uiToggleQueue() {
 function uiRenderQueue() {
   const listEl = document.getElementById("qlist");
   if (!listEl) return;
+
+  if (window.currentRadio) {
+    listEl.innerHTML = "";
+    const div = document.createElement("div");
+    div.className = "qitem selected";
+    div.innerHTML = `
+      <div class="qtitle"><i class="fa-solid fa-tower-broadcast"></i> Radio en direct</div>
+      <div class="qauthor">${escapeHtml(window.currentRadio.name)}</div>
+    `;
+    listEl.appendChild(div);
+    return;
+  }
 
   const q = window.currentQueue || [];
   if (!q.length) {
@@ -379,6 +402,11 @@ async function uiUpdatePlaylistLabel() {
   const el = document.getElementById("playlist");
   if (!el) return;
 
+  if (window.currentRadio) {
+    el.textContent = window.currentRadio.name;
+    return;
+  }
+
   const id = window.currentPlaylistId;
   if (!id) {
     el.textContent = "—";
@@ -437,9 +465,42 @@ async function uiLoadPlaylists() {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.textContent = title || id;
-    if (current && String(id) === String(current)) btn.classList.add("selected");
+    if (!window.currentRadio && current && String(id) === String(current)) btn.classList.add("selected");
     btn.addEventListener("click", () => uiSelectPlaylist(id));
     listEl.appendChild(btn);
+  }
+
+  // radios en direct (si mpv est installé côté serveur)
+  const radios = window.radios || [];
+  if (radios.length) {
+    const head = document.createElement("div");
+    head.className = "plist-head";
+    head.innerHTML = '<i class="fa-solid fa-tower-broadcast"></i> Radios en direct';
+    listEl.appendChild(head);
+    for (const radio of radios) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = radio.name;
+      if (window.currentRadio && window.currentRadio.id === radio.id) btn.classList.add("selected");
+      btn.addEventListener("click", () => uiSelectRadio(radio.id));
+      listEl.appendChild(btn);
+    }
+  }
+}
+
+async function uiSelectRadio(id) {
+  try {
+    const r = await fetch("/api/radio", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    if (navigator.vibrate) navigator.vibrate(15);
+    uiTogglePlaylists(); // fermer
+    await refresh();
+  } catch (e) {
+    alert("Impossible de lancer la radio : " + e.message);
   }
 }
 

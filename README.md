@@ -20,6 +20,12 @@ Pour obtenir le token (écrit dans `run/config.json`) :
 2. lancer `./ytmd_auth.py`, puis valider le code (bouton Allow) dans la fenêtre qui s'ouvre sur l'écran
 3. désactiver « Enable companion authorization » (en 2.1.0, le laisser activé 5 minutes fait planter YTMD)
 
+### radios (facultatives)
+
+Les radios nationales de Radio France en direct (France Inter, franceinfo, France Culture, France Musique, FIP, Mouv') apparaissent en bas de la liste des playlists si [mpv](https://mpv.io/) est installé (`sudo apt install mpv`). Elles sont lues par mpv, pas par YTMD, qui est mis en pause.
+
+En mode radio : lecture/pause coupe et relance le direct, précédent / suivant changent de station, aléatoire, répéter et la position sont désactivés. Choisir une playlist, un morceau de la file ou « Lire » dans la recherche revient à YTMD.
+
 ### recherche (facultative)
 
 Le bouton loupe cherche dans tout YouTube Music (morceaux, albums, playlists), pour lancer un résultat tout de suite ou l'ajouter à la suite du morceau en cours. L'API de YTMD ne sait pas chercher : la recherche passe par [ytmusicapi](https://github.com/sigma67/ytmusicapi), bibliothèque non officielle, absente des dépôts Ubuntu. Elle s'installe dans un venv du projet :
@@ -63,6 +69,7 @@ Il y a un certain nombre de packages nécessaires :
 - pactl
 - python3-requests
 - python3-venv, pour la recherche (voir plus haut)
+- mpv, pour les radios (voir plus haut)
 - je crois que c'est tout
 
 et le fichier [run_at_start.sh](run_at_start.sh) donne un bon exemple de comment lancer les bons programmes (firefox et YouTubeMusicDesktop)
