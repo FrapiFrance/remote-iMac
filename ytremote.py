@@ -327,6 +327,10 @@ RADIOS = [  # (id du flux, nom affiché), dans l'ordre de passage avec précéde
     ("mouv", "Mouv'"),
 ]
 RADIO_NAMES = dict(RADIOS)
+# émission ou morceau en cours : API "livemeta" de Radio France (non documentée), par n° de station
+LIVEMETA_URL = "https://api.radiofrance.fr/livemeta/pull/{}"
+LIVEMETA_IDS = {"franceinter": 1, "franceinfo": 2, "francemusique": 4,
+                "franceculture": 5, "mouv": 6, "fip": 7}
 RADIO_URL = "https://icecast.radiofrance.fr/{}-hifi.aac?id=radiofrance"
 MPV = shutil.which("mpv")  # sans mpv, pas de radios
 
@@ -386,6 +390,49 @@ def radio_exit() -> None:
         _radio["station"] = None
 
 
+_livemeta: dict[str, Any] = {"station": None, "text": "", "until": 0.0}
+_livemeta_lock = threading.Lock()
+
+
+def _fetch_livemeta(station: str) -> tuple[str, float]:
+    # (texte à afficher, date jusqu'à laquelle il reste valable)
+    now = time.time()
+    try:
+        data = requests.get(LIVEMETA_URL.format(LIVEMETA_IDS[station]), timeout=3).json()
+    except Exception as e:
+        print(f"{datetime.now()} livemeta {station}: {type(e).__name__}: {e}")
+        return "", now + 60
+    current = [
+        st for st in (data.get("steps") or {}).values()
+        if st.get("start", 0) <= now < st.get("end", 0)
+    ]
+    if not current:
+        return "", now + 30
+    # le plus détaillé : morceau (depth 3) > partie d'émission > émission (depth 1)
+    step = max(current, key=lambda st: st.get("depth", 0))
+    if step.get("embedType") == "song":
+        who = step.get("authors") or ", ".join(step.get("highlightedArtists") or [])
+        parts = (step.get("title"), who)
+    else:
+        parts = (step.get("titleConcept"), step.get("title"))
+    text = " · ".join(x.strip() for x in parts if x and x.strip())
+    # relire à la fin de l'étape en cours, et au moins chaque minute
+    until = min(now + 60, min(st["end"] for st in current) + 2)
+    return text, until
+
+
+def radio_now_playing(station: str) -> str:
+    c = _livemeta
+    stale = c["station"] != station or time.time() >= c["until"]
+    if stale and station in LIVEMETA_IDS and _livemeta_lock.acquire(blocking=False):
+        try:
+            text, until = _fetch_livemeta(station)
+            c.update(station=station, text=text, until=until)
+        finally:
+            _livemeta_lock.release()
+    return c["text"] if c["station"] == station else ""
+
+
 def radio_status() -> dict[str, Any] | None:
     station = _radio["station"]
     if station is None:
@@ -395,6 +442,7 @@ def radio_status() -> dict[str, Any] | None:
         "id": station,
         "name": RADIO_NAMES.get(station, station),
         "playing": proc is not None and proc.poll() is None,
+        "now": radio_now_playing(station),  # émission ou morceau en cours, ou ""
     }
 
 
@@ -432,7 +480,7 @@ def get_status() -> dict[str, Any]:
         player = {
             "status": "Playing" if radio["playing"] else "Paused",
             "title": radio["name"],
-            "artist": "Radio en direct",
+            "artist": radio["now"] or "Radio en direct",
             "pos": 0.0,
             "length": 0,
         }

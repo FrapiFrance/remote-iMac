@@ -235,7 +235,7 @@ function uiRenderQueue() {
     div.className = "qitem selected";
     div.innerHTML = `
       <div class="qtitle"><i class="fa-solid fa-tower-broadcast"></i> Radio en direct</div>
-      <div class="qauthor">${escapeHtml(window.currentRadio.name)}</div>
+      <div class="qauthor">${escapeHtml([window.currentRadio.name, window.currentRadio.now].filter(Boolean).join(" · "))}</div>
     `;
     listEl.appendChild(div);
     return;
