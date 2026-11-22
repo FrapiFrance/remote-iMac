@@ -330,9 +330,10 @@ RADIOS = [  # (id, nom affiché), dans l'ordre de passage avec précédent / sui
     ("mouv", "Mouv'"),
 ]
 RADIO_NAMES = dict(RADIOS)
-RADIO_FRANCE_URL = "https://icecast.radiofrance.fr/{}-hifi.aac?id=radiofrance"
+# AAC 96 kbit/s (midfi) : très bonne qualité, moitié moins que le hifi (192 kbit/s)
+RADIO_FRANCE_URL = "https://icecast.radiofrance.fr/{}-midfi.aac?id=radiofrance"
 RADIO_URLS = {
-    "radioclassique": "https://radioclassique.ice.infomaniak.ch/radioclassique-high.mp3",
+    "radioclassique": "https://radioclassique.ice.infomaniak.ch/radioclassique-high.aac",  # HE-AAC 64 kbit/s
 }  # les autres : flux Radio France
 # émission ou morceau en cours :
 # - Radio France : API "livemeta" (non documentée), par n° de station
