@@ -33,10 +33,11 @@ async function refresh(){
     // état play/pause
     const st = s.status || "Unknown";
     const btnPlay = document.querySelector(".btn-primary");
+    // le bouton montre l'action qu'il va faire, pas l'état actuel
     if (st === "Playing") {
-      btnPlay.innerHTML = '<i class="fa-solid fa-play"></i>';
-    } else if (st === "Paused") {
       btnPlay.innerHTML = '<i class="fa-solid fa-pause"></i>';
+    } else if (st === "Paused") {
+      btnPlay.innerHTML = '<i class="fa-solid fa-play"></i>';
     } else {
       btnPlay.innerHTML = '<i class="fa-solid fa-ellipsis"></i>';
     }
