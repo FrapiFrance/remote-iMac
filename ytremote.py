@@ -13,6 +13,7 @@ import time
 import requests
 import shutil
 import signal
+import socket
 import sys
 from config import config
 from ytm_api_client import ytmdesktop_api_call  # type: ignore
@@ -318,22 +319,30 @@ def play_from_search(video_id: str | None, playlist_id: str | None, mode: str) -
     return run_ytmdesktop_api_call(["command", "queueAdd", None, None, data])  # type: ignore
 
 
-# ===== Radios de Radio France en direct, lues par mpv (pas par YTMD)
-RADIOS = [  # (id du flux, nom affiché), dans l'ordre de passage avec précédent / suivant
+# ===== Radios en direct, lues par mpv (pas par YTMD)
+RADIOS = [  # (id, nom affiché), dans l'ordre de passage avec précédent / suivant
     ("franceinter", "France Inter"),
     ("franceinfo", "franceinfo"),
     ("franceculture", "France Culture"),
     ("francemusique", "France Musique"),
+    ("radioclassique", "Radio Classique"),
     ("fip", "FIP"),
     ("mouv", "Mouv'"),
 ]
 RADIO_NAMES = dict(RADIOS)
-# émission ou morceau en cours : API "livemeta" de Radio France (non documentée), par n° de station
+RADIO_FRANCE_URL = "https://icecast.radiofrance.fr/{}-hifi.aac?id=radiofrance"
+RADIO_URLS = {
+    "radioclassique": "https://radioclassique.ice.infomaniak.ch/radioclassique-high.mp3",
+}  # les autres : flux Radio France
+# émission ou morceau en cours :
+# - Radio France : API "livemeta" (non documentée), par n° de station
+# - les autres : métadonnées ICY du flux (StreamTitle), demandées à mpv
 LIVEMETA_URL = "https://api.radiofrance.fr/livemeta/pull/{}"
 LIVEMETA_IDS = {"franceinter": 1, "franceinfo": 2, "francemusique": 4,
                 "franceculture": 5, "mouv": 6, "fip": 7}
-RADIO_URL = "https://icecast.radiofrance.fr/{}-hifi.aac?id=radiofrance"
 MPV = shutil.which("mpv")  # sans mpv, pas de radios
+# socket de contrôle de mpv (JSON IPC), pour lire le titre ICY
+MPV_SOCKET = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "ytremote-mpv.sock")
 
 # station : id de la radio en cours (même en pause), None hors mode radio
 _radio: dict[str, Any] = {"station": None, "proc": None}
@@ -361,8 +370,9 @@ def radio_play(station: str) -> None:
         # avec le paquet mpv-mpris, mpv apparaît dans KDE (touches multimédia, lecteur de la
         # barre des tâches) sous le nom de la station ; playerctl_player garde YTMD pour le reste
         _radio["proc"] = subprocess.Popen(
-            [MPV, "--no-video", "--really-quiet",
-             f"--force-media-title={RADIO_NAMES[station]}", RADIO_URL.format(station)],
+            [MPV, "--no-video", "--really-quiet", f"--input-ipc-server={MPV_SOCKET}",
+             f"--force-media-title={RADIO_NAMES[station]}",
+             RADIO_URLS.get(station) or RADIO_FRANCE_URL.format(station)],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
 
@@ -433,7 +443,32 @@ def _fetch_livemeta(station: str) -> tuple[str, float]:
     return text, until
 
 
+def _mpv_icy_title() -> str:
+    # titre ICY du flux en cours, demandé à mpv par sa socket JSON IPC ; "" si indisponible
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.settimeout(0.5)
+            sock.connect(MPV_SOCKET)
+            sock.sendall(b'{"command": ["get_property", "metadata/by-key/icy-title"]}\n')
+            buf = b""
+            while True:
+                chunk = sock.recv(4096)
+                if not chunk:
+                    return ""
+                buf += chunk
+                while b"\n" in buf:
+                    line, buf = buf.split(b"\n", 1)
+                    msg = json.loads(line)
+                    if "error" in msg:  # la réponse (les autres lignes sont des événements)
+                        data = msg.get("data")
+                        return data.strip() if msg["error"] == "success" and isinstance(data, str) else ""
+    except (OSError, ValueError):
+        return ""
+
+
 def radio_now_playing(station: str) -> str:
+    if station not in LIVEMETA_IDS:
+        return _mpv_icy_title()
     c = _livemeta
     stale = c["station"] != station or time.time() >= c["until"]
     if stale and station in LIVEMETA_IDS and _livemeta_lock.acquire(blocking=False):

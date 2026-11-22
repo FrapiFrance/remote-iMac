@@ -22,7 +22,7 @@ Pour obtenir le token (écrit dans `run/config.json`) :
 
 ### radios (facultatives)
 
-Les radios nationales de Radio France en direct (France Inter, franceinfo, France Culture, France Musique, FIP, Mouv') apparaissent en bas de la liste des playlists si [mpv](https://mpv.io/) est installé (`sudo apt install mpv`). Elles sont lues par mpv, pas par YTMD, qui est mis en pause.
+Les radios nationales de Radio France en direct (France Inter, franceinfo, France Culture, France Musique, FIP, Mouv'), ainsi que Radio Classique, apparaissent en bas de la liste des playlists si [mpv](https://mpv.io/) est installé (`sudo apt install mpv`). Elles sont lues par mpv, pas par YTMD, qui est mis en pause. L'émission ou le morceau en cours vient de l'API de Radio France, ou pour Radio Classique du titre transmis dans le flux. Pour ajouter une radio : `RADIOS` et `RADIO_URLS` dans `ytremote.py`.
 
 En mode radio : lecture/pause coupe et relance le direct, précédent / suivant changent de station, aléatoire, répéter et la position sont désactivés. Choisir une playlist, un morceau de la file ou « Lire » dans la recherche revient à YTMD.
 
