@@ -6,14 +6,22 @@ import subprocess
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import threading
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote, parse_qs
 import re
 import os
 import time
 import requests
+import shutil
+import signal
+import sys
 from config import config
-from urllib.parse import unquote
 from ytm_api_client import ytmdesktop_api_call  # type: ignore
+
+# Recherche dans YouTube Music : facultative, nécessite ytmusicapi (voir README, venv)
+try:
+    from ytmusicapi import YTMusic  # type: ignore
+except ImportError:
+    YTMusic = None
 
 if config["playerctl_player"] is not None:
     PLAYER = config["playerctl_player"]
@@ -68,11 +76,15 @@ def run_cmd(cmd: list[str]) -> tuple[int, str]:
     return proc.returncode, (proc.stdout + proc.stderr).strip()
 
 
-def run_playerctl(args: list[str]):
+def run_cmd_safe(cmd: list[str]) -> tuple[int, str]:
     try:
-        return run_cmd(BASE_CMD + args)
+        return run_cmd(cmd)
     except Exception as e:
         return 1, str(e)
+
+
+def run_playerctl(args: list[str]):
+    return run_cmd_safe(BASE_CMD + args)
 
 
 def run_ytmdesktop_api_call(args: list[str | None]) -> tuple[int, dict | None]:
@@ -99,10 +111,7 @@ def send_slideshow_notification(action: str) -> tuple[int, str]:
 
 
 def run_pactl(args: list[str]) -> tuple[int, str]:
-    try:
-        return run_cmd(["pactl"] + args)
-    except Exception as e:
-        return 1, str(e)
+    return run_cmd_safe(["pactl"] + args)
 
 
 def get_system_volume() -> tuple[int, bool]:
@@ -252,6 +261,202 @@ def get_ytmd_playlist() -> dict[str, str]:
     return s["data"] or {}
 
 
+# location="FR" : résultats pour la France. Ne pas mettre language="fr" : ytmusicapi repère
+# les sections de résultats par leur titre anglais, et les recherches filtrées reviennent vides.
+SEARCH_LOCATION = "FR"
+SEARCH_LIMIT = 20
+SEARCH_FILTERS = {"songs", "albums", "playlists"}
+_ytmusic = None
+_ytmusic_lock = threading.Lock()
+
+
+def search_music(query: str, kind: str) -> list[dict[str, str]]:
+    # résultats simplifiés : title, subtitle, et videoId (morceau) ou playlistId (album, playlist)
+    global _ytmusic
+    with _ytmusic_lock:
+        if _ytmusic is None:
+            _ytmusic = YTMusic(location=SEARCH_LOCATION)  # type: ignore
+        ytm = _ytmusic
+    results = []
+    # limit n'est qu'un minimum pour ytmusicapi, d'où la coupe
+    for r in ytm.search(query, filter=kind, limit=SEARCH_LIMIT)[:SEARCH_LIMIT]:
+        artists = ", ".join(a.get("name", "") for a in r.get("artists") or [] if a.get("name"))
+        if kind == "songs" and r.get("videoId"):
+            album = (r.get("album") or {}).get("name") or ""
+            results.append({
+                "title": r.get("title", ""),
+                "subtitle": " · ".join(x for x in (artists, album, r.get("duration") or "") if x),
+                "videoId": r["videoId"],
+            })
+        elif kind == "albums" and r.get("playlistId"):
+            results.append({
+                "title": r.get("title", ""),
+                "subtitle": " · ".join(x for x in (artists, r.get("year") or "") if x),
+                "playlistId": r["playlistId"],
+            })
+        elif kind == "playlists" and str(r.get("browseId", "")).startswith("VL"):
+            # browseId = "VL" + playlistId
+            results.append({
+                "title": r.get("title", ""),
+                "subtitle": r.get("author") or "",
+                "playlistId": r["browseId"][2:],
+            })
+    return results
+
+
+def play_from_search(video_id: str | None, playlist_id: str | None, mode: str) -> tuple[int, Any]:
+    # mode "play" : lecture immédiate ; "next" : ajout dans la file juste après le morceau en cours
+    if mode == "play":
+        return run_ytmdesktop_api_call(["command", "changeVideo", playlist_id, video_id])
+    queue = ((_get_ytmd_raw_state().get("player") or {}).get("queue")) or {}
+    items = queue.get("items") or []
+    selected = queue.get("selectedItemIndex", -1)
+    index = selected + 1 if isinstance(selected, int) and 0 <= selected < len(items) else len(items)
+    # YTMD veut soit videoId, soit playlistId, pas les deux
+    data: dict[str, Any] = {"videoId": video_id} if video_id else {"playlistId": playlist_id}
+    data["index"] = index
+    return run_ytmdesktop_api_call(["command", "queueAdd", None, None, data])  # type: ignore
+
+
+# ===== Radios de Radio France en direct, lues par mpv (pas par YTMD)
+RADIOS = [  # (id du flux, nom affiché), dans l'ordre de passage avec précédent / suivant
+    ("franceinter", "France Inter"),
+    ("franceinfo", "franceinfo"),
+    ("franceculture", "France Culture"),
+    ("francemusique", "France Musique"),
+    ("fip", "FIP"),
+    ("mouv", "Mouv'"),
+]
+RADIO_NAMES = dict(RADIOS)
+# émission ou morceau en cours : API "livemeta" de Radio France (non documentée), par n° de station
+LIVEMETA_URL = "https://api.radiofrance.fr/livemeta/pull/{}"
+LIVEMETA_IDS = {"franceinter": 1, "franceinfo": 2, "francemusique": 4,
+                "franceculture": 5, "mouv": 6, "fip": 7}
+RADIO_URL = "https://icecast.radiofrance.fr/{}-hifi.aac?id=radiofrance"
+MPV = shutil.which("mpv")  # sans mpv, pas de radios
+
+# station : id de la radio en cours (même en pause), None hors mode radio
+_radio: dict[str, Any] = {"station": None, "proc": None}
+_radio_lock = threading.Lock()
+
+
+def _radio_stop_proc() -> None:
+    proc = _radio["proc"]
+    _radio["proc"] = None
+    if proc is not None and proc.poll() is None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+
+def radio_play(station: str) -> None:
+    # lance (ou relance) une station ; met YTMD en pause
+    with _radio_lock:
+        _radio_stop_proc()
+        if _radio["station"] is None:
+            run_playerctl(["pause"])
+        _radio["station"] = station
+        # avec le paquet mpv-mpris, mpv apparaît dans KDE (touches multimédia, lecteur de la
+        # barre des tâches) sous le nom de la station ; playerctl_player garde YTMD pour le reste
+        _radio["proc"] = subprocess.Popen(
+            [MPV, "--no-video", "--really-quiet",
+             f"--force-media-title={RADIO_NAMES[station]}", RADIO_URL.format(station)],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+
+
+def _radio_playing() -> bool:
+    # mpv tourne, et n'a pas été mis en pause au clavier (MPRIS, si mpv-mpris est installé)
+    proc = _radio["proc"]
+    if proc is None or proc.poll() is not None:
+        return False
+    rc, out = run_cmd_safe(["playerctl", "-p", "mpv", "status"])
+    return not (rc == 0 and out.strip() == "Paused")
+
+
+def radio_toggle() -> None:
+    # en direct, une pause n'a pas de sens : on coupe, et on relance le direct
+    # (y compris après une pause au clavier, pour repartir du direct et non du tampon)
+    with _radio_lock:
+        playing = _radio_playing()
+        station = _radio["station"]
+        _radio_stop_proc()
+    if not playing and station:
+        radio_play(station)
+
+
+def radio_zap(step: int) -> None:
+    # précédent / suivant : station voisine dans RADIOS
+    ids = [r[0] for r in RADIOS]
+    station = _radio["station"]
+    i = ids.index(station) if station in ids else 0
+    radio_play(ids[(i + step) % len(ids)])
+
+
+def radio_exit() -> None:
+    # retour à YTMD (choix d'une playlist, d'un morceau...)
+    with _radio_lock:
+        _radio_stop_proc()
+        _radio["station"] = None
+
+
+_livemeta: dict[str, Any] = {"station": None, "text": "", "until": 0.0}
+_livemeta_lock = threading.Lock()
+
+
+def _fetch_livemeta(station: str) -> tuple[str, float]:
+    # (texte à afficher, date jusqu'à laquelle il reste valable)
+    now = time.time()
+    try:
+        data = requests.get(LIVEMETA_URL.format(LIVEMETA_IDS[station]), timeout=3).json()
+    except Exception as e:
+        print(f"{datetime.now()} livemeta {station}: {type(e).__name__}: {e}")
+        return "", now + 60
+    current = [
+        st for st in (data.get("steps") or {}).values()
+        if st.get("start", 0) <= now < st.get("end", 0)
+    ]
+    if not current:
+        return "", now + 30
+    # le plus détaillé : morceau (depth 3) > partie d'émission > émission (depth 1)
+    step = max(current, key=lambda st: st.get("depth", 0))
+    if step.get("embedType") == "song":
+        who = step.get("authors") or ", ".join(step.get("highlightedArtists") or [])
+        parts = (step.get("title"), who)
+    else:
+        parts = (step.get("titleConcept"), step.get("title"))
+    text = " · ".join(x.strip() for x in parts if x and x.strip())
+    # relire à la fin de l'étape en cours, et au moins chaque minute
+    until = min(now + 60, min(st["end"] for st in current) + 2)
+    return text, until
+
+
+def radio_now_playing(station: str) -> str:
+    c = _livemeta
+    stale = c["station"] != station or time.time() >= c["until"]
+    if stale and station in LIVEMETA_IDS and _livemeta_lock.acquire(blocking=False):
+        try:
+            text, until = _fetch_livemeta(station)
+            c.update(station=station, text=text, until=until)
+        finally:
+            _livemeta_lock.release()
+    return c["text"] if c["station"] == station else ""
+
+
+def radio_status() -> dict[str, Any] | None:
+    station = _radio["station"]
+    if station is None:
+        return None
+    return {
+        "id": station,
+        "name": RADIO_NAMES.get(station, station),
+        "playing": _radio_playing(),
+        "now": radio_now_playing(station),  # émission ou morceau en cours, ou ""
+    }
+
+
 def get_status() -> dict[str, Any]:
     global config
     global current_photo_image_path
@@ -280,6 +485,17 @@ def get_status() -> dict[str, Any]:
         except Exception as e:
             print(f"{datetime.now()} photo_image_path read error: {e}")
 
+    radio = radio_status()
+    if radio:
+        # en mode radio, l'état vient de mpv ; YTMD est en pause derrière
+        player = {
+            "status": "Playing" if radio["playing"] else "Paused",
+            "title": radio["name"],
+            "artist": radio["now"] or "Radio en direct",
+            "pos": 0.0,
+            "length": 0,
+        }
+
     return {
         "status": player["status"],
         "title": player["title"],
@@ -295,6 +511,9 @@ def get_status() -> dict[str, Any]:
             "queue"
         ],  # list of {"title":..., "author":..., "videoId":..., "selected":false/true} # type: ignore
         "hide_photos": hide_photos,
+        "search": YTMusic is not None,  # recherche disponible (ytmusicapi installé)
+        "radio": radio,  # None, ou {"id", "name", "playing"}
+        "radios": [{"id": i, "name": n} for i, n in RADIOS] if MPV else [],
         "photo_image_path": photo_image_path,
     }
 
@@ -341,6 +560,29 @@ class Handler(BaseHTTPRequestHandler):
             self._send(
                 200,
                 json.dumps(get_status()).encode("utf-8"),
+                "application/json; charset=utf-8",
+            )
+            return
+        if p == "/api/search":
+            # /api/search?q=...&type=songs|albums|playlists
+            if YTMusic is None:
+                self._send(503, b"ytmusicapi absent : recherche indisponible\n")
+                return
+            qs = parse_qs(urlparse(self.path).query)
+            query = qs.get("q", [""])[0].strip()
+            kind = qs.get("type", ["songs"])[0]
+            if not query or kind not in SEARCH_FILTERS:
+                self._send(400, b"Bad request\n")
+                return
+            try:
+                results = search_music(query, kind)
+            except Exception as e:
+                print(f"{datetime.now()} search error: {type(e).__name__}: {e}")
+                self._send(502, f"Erreur de recherche : {e}\n".encode("utf-8", "ignore"))
+                return
+            self._send(
+                200,
+                json.dumps(results).encode("utf-8"),
                 "application/json; charset=utf-8",
             )
             return
@@ -411,10 +653,40 @@ class Handler(BaseHTTPRequestHandler):
             "/api/shuffle": ("forced_infra", []),
             "/api/repeat": ("forced_infra", []),
             "/api/playlist-track-set": ("forced_infra", []),
+            "/api/search-play": ("forced_infra", []),
+            "/api/radio": ("forced_infra", []),
         }
         if p not in mapping:
             self._send(404, b"Not found\n")
             return
+        if p == "/api/radio":
+            # Read JSON: {"id": "franceculture"}
+            length = int(self.headers.get("Content-Length", "0") or "0")
+            raw = self.rfile.read(length) if length > 0 else b"{}"
+            try:
+                station = json.loads(raw.decode("utf-8", "ignore")).get("id")
+            except Exception:
+                station = None
+            if not MPV or station not in RADIO_NAMES:
+                self._send(400, b"Radio inconnue, ou mpv absent\n")
+                return
+            radio_play(station)
+            self._send(200, b"OK\n")
+            return
+        if _radio["station"] is not None:
+            # mode radio : lecture et précédent / suivant pilotent mpv ;
+            # aléatoire, répéter et position n'ont pas de sens en direct
+            if p == "/api/play-pause":
+                radio_toggle()
+                self._send(200, b"OK\n")
+                return
+            if p in ("/api/next", "/api/previous"):
+                radio_zap(1 if p == "/api/next" else -1)
+                self._send(200, b"OK\n")
+                return
+            if p in ("/api/shuffle", "/api/repeat", "/api/seek-set"):
+                self._send(409, b"Radio en direct\n")
+                return
         if p == "/api/vol-set":
             # Read JSON: {"value": 0..100}
             length = int(self.headers.get("Content-Length", "0") or "0")
@@ -483,7 +755,31 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self._send(500, b"ytmdesktop error: shuffle\n")
             return
+        if p == "/api/search-play":
+            # Read JSON: {"videoId": "..."} ou {"playlistId": "..."}, et "mode": "play" | "next"
+            length = int(self.headers.get("Content-Length", "0") or "0")
+            raw = self.rfile.read(length) if length > 0 else b"{}"
+            try:
+                data = json.loads(raw.decode("utf-8", "ignore"))
+                video_id = data.get("videoId") or None
+                playlist_id = data.get("playlistId") or None
+                mode = data.get("mode", "play")
+                if not (video_id or playlist_id) or mode not in ("play", "next"):
+                    raise ValueError
+            except Exception:
+                self._send(400, b"Bad JSON\n")
+                return
+            if mode == "play":
+                radio_exit()
+            rc, out = play_from_search(video_id, playlist_id, mode)
+            invalidate_ytmd_status()
+            if rc == 0:
+                self._send(200, b"OK\n")
+            else:
+                self._send(500, f"ytmdesktop error: {mode}\n".encode())
+            return
         if p == "/api/playlist-track-set":
+            radio_exit()
             # Read JSON: {"playlistId": "...", "trackId": "..."}
             length = int(self.headers.get("Content-Length", "0") or "0")
             raw = self.rfile.read(length) if length > 0 else b"{}"
@@ -544,4 +840,9 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     print(f"Listening on http://{HOST}:{PORT}  (Ctrl+C to stop)")
     # multi-thread : un /api/status lent (playerctl, pactl, YTMD) ne bloque plus les boutons
-    ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
+    # un kill (SIGTERM) passe aussi par le finally ci-dessous
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    try:
+        ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
+    finally:
+        radio_exit()  # ne pas laisser mpv jouer tout seul

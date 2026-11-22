@@ -98,7 +98,21 @@ async function refresh(){
       // console.log("normal playlist id update");
       window.currentPlaylistId = s.playlist_id || null;
     }
+    // mode radio : station en cours (ou null), et liste des radios disponibles
+    window.currentRadio = s.radio || null;
+    window.radios = s.radios || [];
+    const isRadio = !!window.currentRadio;
+    for (const id of ["btnShuffle", "btnRepeat"]) {
+      const b = document.getElementById(id);
+      b.disabled = isRadio;
+      if (isRadio) b.classList.add("off");
+    }
+    document.getElementById("pos").disabled = isRadio;
+
     await uiUpdatePlaylistLabel();
+
+    // recherche disponible (ytmusicapi installé côté serveur)
+    document.getElementById("btnSearch").hidden = !s.search;
 
     // etat queue
     window.currentQueue = s.queue || []; // list of {"title":..., "author":..., "videoId":..., "selected":false/true}
@@ -215,6 +229,18 @@ function uiRenderQueue() {
   const listEl = document.getElementById("qlist");
   if (!listEl) return;
 
+  if (window.currentRadio) {
+    listEl.innerHTML = "";
+    const div = document.createElement("div");
+    div.className = "qitem selected";
+    div.innerHTML = `
+      <div class="qtitle"><i class="fa-solid fa-tower-broadcast"></i> Radio en direct</div>
+      <div class="qauthor">${escapeHtml([window.currentRadio.name, window.currentRadio.now].filter(Boolean).join(" · "))}</div>
+    `;
+    listEl.appendChild(div);
+    return;
+  }
+
   const q = window.currentQueue || [];
   if (!q.length) {
     listEl.innerHTML = '<div style="opacity:.7">File vide</div>';
@@ -264,6 +290,94 @@ async function uiSelectQueueItem(videoId) {
   }
 }
 
+// ===== Recherche (YouTube Music, via ytmusicapi côté serveur)
+let searchKind = "songs";
+
+function uiToggleSearch() {
+  const overlay = document.getElementById("sOverlay");
+  if (!overlay) return;
+
+  const show = !overlay.classList.contains("show");
+  overlay.classList.toggle("show", show);
+  overlay.setAttribute("aria-hidden", String(!show));
+
+  if (show) document.getElementById("searchInput").focus();
+}
+
+function uiSearchKind(btn) {
+  searchKind = btn.dataset.kind;
+  for (const b of btn.parentElement.children) b.classList.toggle("active", b === btn);
+  if (document.getElementById("searchInput").value.trim()) uiSearch();
+}
+
+async function uiSearch() {
+  const input = document.getElementById("searchInput");
+  const listEl = document.getElementById("slist");
+  const q = input.value.trim();
+  if (!q) return;
+  input.blur(); // referme le clavier du téléphone
+
+  listEl.innerHTML = '<div style="opacity:.7">Recherche…</div>';
+  try {
+    const r = await fetch(`/api/search?type=${searchKind}&q=${encodeURIComponent(q)}`, { cache: "no-store" });
+    if (!r.ok) throw new Error(await r.text());
+    uiRenderSearch(await r.json());
+  } catch (e) {
+    listEl.innerHTML = "";
+    const err = document.createElement("div");
+    err.style.opacity = ".7";
+    err.textContent = "Erreur : " + e.message;
+    listEl.appendChild(err);
+  }
+}
+
+function uiRenderSearch(results) {
+  const listEl = document.getElementById("slist");
+  if (!results.length) {
+    listEl.innerHTML = '<div style="opacity:.7">Aucun résultat</div>';
+    return;
+  }
+
+  listEl.innerHTML = "";
+  for (const item of results) {
+    const row = document.createElement("div");
+    row.className = "qitem sitem";
+    row.innerHTML = `
+      <div class="stext">
+        <div class="qtitle">${escapeHtml(item.title || "—")}</div>
+        <div class="qauthor">${escapeHtml(item.subtitle || "")}</div>
+      </div>
+      <button type="button" class="btn-close" aria-label="Lire maintenant"><i class="fa-solid fa-play"></i></button>
+      <button type="button" class="btn-close" aria-label="À la suite"><i class="fa-solid fa-plus"></i></button>
+    `;
+    const [btnPlay, btnNext] = row.querySelectorAll("button");
+    btnPlay.addEventListener("click", () => uiPlayFromSearch(item, "play", btnPlay));
+    btnNext.addEventListener("click", () => uiPlayFromSearch(item, "next", btnNext));
+    listEl.appendChild(row);
+  }
+}
+
+async function uiPlayFromSearch(item, mode, btn) {
+  try {
+    const r = await fetch("/api/search-play", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ videoId: item.videoId, playlistId: item.playlistId, mode }),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    if (navigator.vibrate) navigator.vibrate(15);
+    if (mode === "play") {
+      uiToggleSearch(); // on referme : la musique a changé
+    } else {
+      // on reste dans la recherche, avec une coche en confirmation
+      btn.innerHTML = '<i class="fa-solid fa-check"></i>';
+      btn.disabled = true;
+    }
+  } catch (e) {
+    alert("Erreur : " + e.message);
+  }
+}
+
 // petit helper pour éviter d’injecter du HTML depuis les titres
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({
@@ -287,6 +401,11 @@ async function uiTogglePlaylists() {
 async function uiUpdatePlaylistLabel() {
   const el = document.getElementById("playlist");
   if (!el) return;
+
+  if (window.currentRadio) {
+    el.textContent = window.currentRadio.name;
+    return;
+  }
 
   const id = window.currentPlaylistId;
   if (!id) {
@@ -346,9 +465,42 @@ async function uiLoadPlaylists() {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.textContent = title || id;
-    if (current && String(id) === String(current)) btn.classList.add("selected");
+    if (!window.currentRadio && current && String(id) === String(current)) btn.classList.add("selected");
     btn.addEventListener("click", () => uiSelectPlaylist(id));
     listEl.appendChild(btn);
+  }
+
+  // radios en direct (si mpv est installé côté serveur)
+  const radios = window.radios || [];
+  if (radios.length) {
+    const head = document.createElement("div");
+    head.className = "plist-head";
+    head.innerHTML = '<i class="fa-solid fa-tower-broadcast"></i> Radios en direct';
+    listEl.appendChild(head);
+    for (const radio of radios) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = radio.name;
+      if (window.currentRadio && window.currentRadio.id === radio.id) btn.classList.add("selected");
+      btn.addEventListener("click", () => uiSelectRadio(radio.id));
+      listEl.appendChild(btn);
+    }
+  }
+}
+
+async function uiSelectRadio(id) {
+  try {
+    const r = await fetch("/api/radio", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    if (navigator.vibrate) navigator.vibrate(15);
+    uiTogglePlaylists(); // fermer
+    await refresh();
+  } catch (e) {
+    alert("Impossible de lancer la radio : " + e.message);
   }
 }
 
@@ -407,6 +559,14 @@ function uiShowTab(which) {
   if (!overlay) return;
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay) uiTogglePlaylists();
+  });
+})();
+
+(function () {
+  const overlay = document.getElementById("sOverlay");
+  if (!overlay) return;
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) uiToggleSearch();
   });
 })();
 

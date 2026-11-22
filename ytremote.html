@@ -115,6 +115,10 @@
           <button class="btn-icon btn-sm btn-secondary" onclick="uiToggleQueue()" aria-label="File de lecture" type="button">
             <i class="fa-solid fa-list"></i>
           </button>
+
+          <button class="btn-icon btn-sm btn-secondary" onclick="uiToggleSearch()" aria-label="Rechercher" type="button" id="btnSearch" hidden>
+            <i class="fa-solid fa-magnifying-glass"></i>
+          </button>
         </div>
 
         <div class="now now-compact">
@@ -172,6 +176,39 @@
 
         <div class="overlay-hint">
           Tap sur un morceau pour basculer dessus
+        </div>
+      </div>
+    </div>
+
+    <!-- Search overlay -->
+    <div class="overlay" id="sOverlay" aria-hidden="true">
+      <div class="overlay-card">
+        <div class="overlay-head">
+          <div class="overlay-title">
+            <i class="fa-solid fa-magnifying-glass"></i> <span>Rechercher</span>
+          </div>
+          <button class="btn-close" type="button" onclick="uiToggleSearch()" aria-label="Fermer">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <form class="search-form" onsubmit="uiSearch(); return false;">
+          <input id="searchInput" type="search" placeholder="Titre, artiste, album…" autocomplete="off" enterkeyhint="search" />
+          <button class="btn-close" type="submit" aria-label="Lancer la recherche">
+            <i class="fa-solid fa-magnifying-glass"></i>
+          </button>
+        </form>
+
+        <div class="seg" role="group" aria-label="Type de résultats">
+          <button type="button" class="active" data-kind="songs" onclick="uiSearchKind(this)">Morceaux</button>
+          <button type="button" data-kind="albums" onclick="uiSearchKind(this)">Albums</button>
+          <button type="button" data-kind="playlists" onclick="uiSearchKind(this)">Playlists</button>
+        </div>
+
+        <div class="qlist" id="slist"></div>
+
+        <div class="overlay-hint">
+          <i class="fa-solid fa-play"></i> lire maintenant • <i class="fa-solid fa-plus"></i> à la suite du morceau en cours
         </div>
       </div>
     </div>
