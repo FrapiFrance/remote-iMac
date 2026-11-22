@@ -2,8 +2,8 @@
 
 une télécommande pour YouTubeMusicDesktop et MagicMirror sur l'iMac
 
- <img src="IMG_2344.jpg" style="zoom:33%;" />
- <img src="IMG_2345.jpg" style="zoom:33%;" />
+ <img src="IMG_2344.jpg" style="zoom:25%;" />
+ <img src="IMG_2345.jpg" style="zoom:25%;" />
 
 Si vous n'utilisez que YTMDesktop (cas le plus fréquent sans doute :-)) :
 
